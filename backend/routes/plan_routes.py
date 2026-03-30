@@ -2,15 +2,57 @@ from flask import Blueprint, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from models.plan import TrainingPlan
+from models.plan_task import PlanTask
+from models.record import TrainingRecord
 from services.plan_service import (
-    check_in_plan,
+    ai_generate_plan,
+    check_in_task,
     create_training_plan,
+    delete_plan,
+    get_plan_detail,
+    list_plan_overview,
+    list_plan_tasks,
     list_training_plans,
     update_training_plan,
 )
+from utils.extensions import db
 from utils.response import fail, ok
 
 plan_bp = Blueprint("plans", __name__)
+
+
+@plan_bp.get("/plans/overview")
+@jwt_required()
+def get_overview():
+    user_id = int(get_jwt_identity())
+    return ok(list_plan_overview(user_id))
+
+
+@plan_bp.get("/plans")
+@jwt_required()
+def list_plans():
+    user_id = int(get_jwt_identity())
+    plans = list_training_plans(user_id)
+    return ok([
+        {
+            "id": p.id,
+            "planName": p.plan_name,
+            "description": p.description,
+            "status": p.status,
+            "createdAt": p.created_at.isoformat(),
+        }
+        for p in plans
+    ])
+
+
+@plan_bp.get("/plans/<int:plan_id>")
+@jwt_required()
+def get_plan(plan_id: int):
+    user_id = int(get_jwt_identity())
+    plan = get_plan_detail(plan_id, user_id)
+    if not plan:
+        return fail("plan not found", 404)
+    return ok(plan)
 
 
 @plan_bp.post("/plans")
@@ -26,46 +68,49 @@ def create_plan():
     return ok({"planId": plan.id}, "plan created")
 
 
-@plan_bp.get("/plans")
+@plan_bp.post("/plans/ai-generate")
 @jwt_required()
-def list_plans():
+def ai_generate():
     user_id = int(get_jwt_identity())
-    plans = list_training_plans(user_id)
-    return ok(
-        [
-            {
-                "id": p.id,
-                "planName": p.plan_name,
-                "description": p.description,
-                "status": p.status,
-                "createdAt": p.created_at.isoformat(),
-            }
-            for p in plans
-        ]
-    )
+    payload = request.get_json(silent=True) or {}
+    goal = payload.get("goal", "综合体能提升")
+    result = ai_generate_plan(user_id, goal)
+    return ok(result)
 
 
-@plan_bp.put("/plans/<int:plan_id>")
+@plan_bp.delete("/plans/<int:plan_id>")
 @jwt_required()
-def update_plan(plan_id: int):
+def remove_plan(plan_id: int):
     user_id = int(get_jwt_identity())
     plan = TrainingPlan.query.filter_by(id=plan_id, user_id=user_id).first()
     if not plan:
         return fail("plan not found", 404)
 
-    payload = request.get_json(silent=True) or {}
-    update_training_plan(plan, payload)
-    return ok(message="plan updated")
+    delete_plan(plan)
+    return ok(message="plan deleted")
 
 
-@plan_bp.post("/plans/<int:plan_id>/check-in")
+@plan_bp.get("/plans/today")
 @jwt_required()
-def check_in(plan_id: int):
+def today_tasks():
     user_id = int(get_jwt_identity())
-    plan = TrainingPlan.query.filter_by(id=plan_id, user_id=user_id).first()
-    if not plan:
-        return fail("plan not found", 404)
+    tasks = list_plan_tasks(user_id)
+    return ok(tasks)
 
+
+@plan_bp.patch("/plans/today/<int:task_id>/complete")
+@jwt_required()
+def complete_task(task_id: int):
+    user_id = int(get_jwt_identity())
     payload = request.get_json(silent=True) or {}
-    record = check_in_plan(user_id, plan, payload)
-    return ok({"recordId": record.id}, "check-in success")
+    task = db.session.get(PlanTask, task_id)
+    if not task:
+        return fail("task not found", 404)
+    if task.plan_id:
+        plan = db.session.get(TrainingPlan, task.plan_id)
+        if not plan or plan.user_id != user_id:
+            return fail("task not found", 404)
+
+    is_completed = payload.get("isCompleted", True)
+    record = check_in_task(user_id, task, is_completed)
+    return ok({"recordId": record.id if record else None, "taskId": task.id}, "task updated")

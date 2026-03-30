@@ -1,6 +1,10 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from utils.extensions import db
+
+
+def _utcnow():
+    return datetime.now(timezone.utc)
 
 
 class TrainingPlan(db.Model):
@@ -10,5 +14,5 @@ class TrainingPlan(db.Model):
     plan_name = db.Column(db.String(128), nullable=False)
     description = db.Column(db.Text, default="")
     status = db.Column(db.String(32), default="todo")
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=_utcnow)
+    updated_at = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)

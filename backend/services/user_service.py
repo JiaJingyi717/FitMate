@@ -18,7 +18,12 @@ def create_login_token(user_id: int):
 
 
 def update_user_profile(user, payload: dict):
+    user.nickname = payload.get("nickname", user.nickname)
+    user.avatar = payload.get("avatar", user.avatar)
+    user.gender = payload.get("gender", user.gender)
+    user.height = payload.get("height", user.height)
+    user.weight = payload.get("weight", user.weight)
+    user.age = payload.get("age", user.age)
     user.goal = payload.get("goal", user.goal)
-    user.coach_gender = payload.get("coachGender", user.coach_gender)
-    user.coach_style = payload.get("coachStyle", user.coach_style)
+    user.current_coach_id = payload.get("currentCoachId", user.current_coach_id)
     db.session.commit()

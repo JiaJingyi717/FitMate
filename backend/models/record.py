@@ -1,6 +1,10 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from utils.extensions import db
+
+
+def _utcnow():
+    return datetime.now(timezone.utc)
 
 
 class TrainingRecord(db.Model):
@@ -11,4 +15,4 @@ class TrainingRecord(db.Model):
     duration = db.Column(db.Integer, default=0)
     exercise_type = db.Column(db.String(64), nullable=False)
     record_date = db.Column(db.Date, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=_utcnow)

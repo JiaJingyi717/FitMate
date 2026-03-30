@@ -2,12 +2,13 @@ from flask import Flask
 from flask_cors import CORS
 
 from config import Config
-from data.seed_data import seed_knowledge
-from routes.ai_routes import ai_bp
-from routes.knowledge_routes import knowledge_bp
+from data.seed_data import seed_all
+from routes.analytics_routes import analytics_bp
+from routes.articles_routes import articles_bp
+from routes.auth_routes import auth_bp
+from routes.coaches_routes import coaches_bp
 from routes.plan_routes import plan_bp
-from routes.stats_routes import stats_bp
-from routes.user_routes import user_bp
+from routes.users_routes import users_bp
 from utils.extensions import db, jwt
 from utils.response import ok
 
@@ -27,15 +28,22 @@ def create_app():
     def health():
         return ok({"status": "up"})
 
-    app.register_blueprint(user_bp, url_prefix="/api")
-    app.register_blueprint(ai_bp, url_prefix="/api")
+    # 用户认证
+    app.register_blueprint(auth_bp, url_prefix="/api")
+    # 个人中心
+    app.register_blueprint(users_bp, url_prefix="/api")
+    # AI教练
+    app.register_blueprint(coaches_bp, url_prefix="/api")
+    # 训练计划
     app.register_blueprint(plan_bp, url_prefix="/api")
-    app.register_blueprint(knowledge_bp, url_prefix="/api")
-    app.register_blueprint(stats_bp, url_prefix="/api")
+    # 知识库
+    app.register_blueprint(articles_bp, url_prefix="/api")
+    # 数据分析
+    app.register_blueprint(analytics_bp, url_prefix="/api")
 
     with app.app_context():
         db.create_all()
-        seed_knowledge()
+        seed_all()
 
     return app
 
