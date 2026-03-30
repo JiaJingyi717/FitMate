@@ -99,6 +99,188 @@ src/
 
 ## 二、后端架构设计
 
+### 1. 后端总体架构说明
+
+后端采用 **Python Flask** 框架，以 RESTful API 风格向前端提供 JSON 数据接口。
+
+整体分为四层：
+
+- **路由层（`routes/`）**：接收 HTTP 请求，解析参数，调用业务层，需登录接口使用 `@jwt_required()` 鉴权
+- **业务层（`services/`）**：封装具体业务逻辑，如用户注册登录、AI 对话、训练计划增删改查、数据统计聚合等
+- **模型层（`models/`）**：使用 SQLAlchemy ORM 定义与数据库表一一对应的 Python 类
+- **工具层（`utils/`）**：数据库连接与 JWT 扩展初始化、统一 JSON 响应封装等通用能力
+
+**设计原因：**
+
+- **分层架构**使各层职责单一，接口变更只影响路由层，业务逻辑集中管理，改动范围可控
+- **统一 `/api` 前缀**便于 Nginx 反向代理与网关转发，也一眼区分接口路径与静态资源
+- **统一 JSON 响应**（`code` / `message` / `data`）让前端 Axios 只写一套解析逻辑，减少联调成本
+- **Flask 轻量灵活**：适合本项目快速迭代节奏，答辩时也容易演示
+
+### 2. 架构图
+
+```mermaid
+graph LR
+    Client[前端] -->|HTTP JSON| Routes[路由层 Routes]
+    Routes --> Services[业务层 Services]
+    Services --> Models[模型层 Models]
+    Models --> DB[(数据库 MySQL / SQLite)]
+    Services --> AI[AI服务 DeepSeek API]
+```
+
+### 3. 技术栈与职责
+
+| 技术 | 用途 |
+|------|------|
+| Flask | Web 框架、蓝图注册 |
+| Flask-SQLAlchemy | ORM 模型层，Python 类与数据库表映射 |
+| Flask-JWT-Extended | JWT 无状态认证，Token 有效期 7 天 |
+| Flask-CORS | 解决前后端分离跨域问题 |
+| PyMySQL | MySQL 驱动，配合 `DATABASE_URL = mysql+pymysql://...` 使用 |
+| python-dotenv | 从 `.env` 文件读取敏感配置（数据库密码、API Key 等） |
+
+### 4. 后端目录结构
+
+```
+backend/
+├── app.py                  # 应用入口：创建实例、注册蓝图、初始化数据库
+├── config.py               # 配置类：DATABASE_URL、SECRET_KEY、JWT 配置
+├── requirements.txt         # Python 依赖清单
+├── schema_mysql.sql         # MySQL 建表脚本（生产环境使用）
+├── .env / .env.example     # 环境变量（勿提交 Git）
+│
+├── models/                 # 数据模型层（ORM）
+│   ├── user.py             # users 表
+│   ├── plan.py             # training_plan 表
+│   ├── record.py           # training_record 表
+│   └── knowledge.py         # knowledge 表
+│
+├── routes/                 # 路由层（蓝图）
+│   ├── user_routes.py      # /api/register、/api/login、/api/user/profile
+│   ├── ai_routes.py        # /api/ai/chat
+│   ├── plan_routes.py      # /api/plans、/api/plans/generate、/api/plans/{id}/check-in
+│   ├── knowledge_routes.py  # /api/knowledge、/api/knowledge/search、/api/knowledge/{id}
+│   └── stats_routes.py     # /api/stats/summary、/api/stats/advice
+│
+├── services/               # 业务逻辑层
+│   ├── user_service.py      # 用户注册、登录、资料更新
+│   ├── ai_service.py       # 调用 DeepSeek API 构建 Prompt 与处理回复
+│   ├── plan_service.py      # 训练计划 CRUD 与打卡逻辑
+│   ├── knowledge_service.py # 知识查询与关键词搜索
+│   └── stats_service.py     # 数据统计聚合与 AI 建议生成
+│
+├── utils/                   # 工具层
+│   ├── extensions.py        # db、jwt 单例初始化
+│   └── response.py         # ok() / fail() 统一 JSON 响应封装
+│
+└── data/                    # 测试数据
+    └── seed_data.py          # 知识库初始数据
+```
+
+### 5. 接口设计要点
+
+**统一响应格式：**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+**认证机制：**
+
+- `POST /api/login` 返回 JWT Token（有效期 7 天）
+- 需登录的接口使用装饰器 `@jwt_required()`
+- 请求头格式：`Authorization: Bearer <token>`
+
+详细接口列表见项目根目录 `api.md`。
+
+---
+
+## 三、数据库设计
+
+### 1. 数据库总体说明
+
+- **数据库名**：`fitmate`
+- **字符集**：`utf8mb4`（支持中文与 emoji）
+- **核心表**：用户、训练计划、训练记录、知识库（共 4 张）
+
+**设计原因：**
+
+- **MySQL + utf8mb4**：支持健身内容中的中文动作名称与动作描述
+- **四张核心表围绕核心业务**：用户 → 训练计划 → 打卡记录，形成完整的训练管理链路；知识库独立，与用户解耦，供全站共享浏览
+- **1:N 关系**：一个用户可拥有多个计划和打卡记录，结构清晰、扩展方便
+- **`plan_id` 可空**：打卡记录可以不属于任何计划，支持自由打卡场景
+- **索引优化**：用户名唯一索引加速登录查询；`user_id`、`record_date` 索引加速统计聚合
+
+### 2. E-R 图
+
+```mermaid
+erDiagram
+    users {
+        bigint id PK
+        varchar username UK
+        varchar password
+        varchar goal
+        varchar coach_gender
+        varchar coach_style
+        datetime created_at
+    }
+
+    training_plan {
+        bigint id PK
+        bigint user_id FK
+        varchar plan_name
+        varchar description
+        varchar status
+        datetime created_at
+        datetime updated_at
+    }
+
+    training_record {
+        bigint id PK
+        bigint user_id FK
+        bigint plan_id FK "可空"
+        int duration
+        varchar exercise_type
+        date record_date
+        datetime created_at
+    }
+
+    knowledge {
+        bigint id PK
+        varchar title
+        varchar category
+        text content
+        varchar video_url
+    }
+
+    users ||--o{ training_plan : "1:N，用户拥有计划"
+    users ||--o{ training_record : "1:N，用户打卡"
+    training_plan ||--o{ training_record : "1:N，计划含多条打卡（plan_id可空）"
+```
+
+### 3. 表间关系
+
+| 关系 | 说明 |
+|------|------|
+| 用户 → 训练计划 | **1 : N**，`training_plan.user_id` → `users.id` |
+| 用户 → 训练记录 | **1 : N**，`training_record.user_id` → `users.id` |
+| 训练计划 → 训练记录 | **1 : N**，`training_record.plan_id` → `training_plan.id`（**可为空**，支持不关联计划的自由打卡） |
+| 知识库 | 独立表，无用户外键，供全站浏览与关键词检索 |
+
+### 4. 落地方式
+
+| 方式 | 说明 |
+|------|------|
+| **ORM 模型** | `backend/models/*.py` 与四张表一一对应，开发阶段 `db.create_all()` 自动同步表结构 |
+| **MySQL 脚本** | `backend/schema_mysql.sql` 用于生产环境手工初始化或 DBA 审查 |
+| **详细字段说明** | 字段类型、约束、索引、示例数据，见 `docs/database.md` |
+
+---
+
 ## 三、数据库设计
 
 ## 四、系统交互流程设计
