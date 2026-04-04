@@ -5,6 +5,7 @@ import pytest
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["JWT_SECRET_KEY"] = "test-jwt-secret"
 os.environ["SECRET_KEY"] = "test-secret"
+os.environ["FITMATE_SKIP_MIGRATIONS"] = "1"
 
 from app import create_app
 from utils.extensions import db
@@ -26,7 +27,8 @@ def client(app):
 
 @pytest.fixture(scope="function")
 def auth_headers(client):
-    client.post("/api/users/register", json={"username": "testuser", "password": "password123"})
-    resp = client.post("/api/auth/login", json={"username": "testuser", "password": "password123"})
-    token = resp.get_json()["data"]["token"]
+    client.post("/api/users/register", json={"email": "test@test.com", "password": "password123"})
+    resp = client.post("/api/auth/login", json={"email": "test@test.com", "password": "password123"})
+    data = resp.get_json()
+    token = data["data"]["token"]
     return {"Authorization": f"Bearer {token}"}

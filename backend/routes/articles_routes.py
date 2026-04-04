@@ -2,11 +2,11 @@ from flask import Blueprint, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from models.article import Article
-from models.article_interaction import ArticleCollect, ArticleComment, ArticleLike
-from models.user import User
+from models.article_interaction import ArticleComment
 from services.article_service import (
     collect_article,
     comment_article,
+    get_article_categories,
     get_article_comments,
     get_article_detail,
     get_articles,
@@ -23,13 +23,26 @@ articles_bp = Blueprint("articles", __name__)
 def list_articles():
     category = request.args.get("category")
     keyword = request.args.get("keyword")
-    rows = get_articles(category=category, keyword=keyword)
+    type_ = request.args.get("type")
+    rows = get_articles(category=category, keyword=keyword, type_=type_)
     return ok(rows)
+
+
+@articles_bp.get("/articles/categories")
+def categories():
+    return ok(get_article_categories())
 
 
 @articles_bp.get("/articles/<int:article_id>")
 def article_detail(article_id: int):
-    article = get_article_detail(article_id)
+    user_id = None
+    try:
+        from flask_jwt_extended import get_jwt_identity
+        user_id = int(get_jwt_identity())
+    except Exception:
+        pass
+
+    article = get_article_detail(article_id, user_id)
     if not article:
         return fail("article not found", 404)
     return ok(article)
@@ -43,8 +56,8 @@ def like(article_id: int):
     if not article:
         return fail("article not found", 404)
 
-    like_article(user_id, article)
-    return ok({"likeCount": article.like_count})
+    like_count, is_liked = like_article(user_id, article)
+    return ok({"likeCount": like_count, "isLiked": is_liked})
 
 
 @articles_bp.post("/articles/<int:article_id>/collect")
@@ -55,8 +68,8 @@ def collect(article_id: int):
     if not article:
         return fail("article not found", 404)
 
-    collect_article(user_id, article)
-    return ok({"collectCount": article.collect_count})
+    collect_count, is_collected = collect_article(user_id, article)
+    return ok({"collectCount": collect_count, "isCollected": is_collected})
 
 
 @articles_bp.get("/articles/<int:article_id>/comments")
@@ -65,8 +78,11 @@ def comments(article_id: int):
     if not article:
         return fail("article not found", 404)
 
-    rows = get_article_comments(article_id)
-    return ok(rows)
+    page = request.args.get("page", 1, type=int)
+    page_size = request.args.get("pageSize", 20, type=int)
+
+    result = get_article_comments(article_id, page=page, page_size=page_size)
+    return ok(result)
 
 
 @articles_bp.post("/articles/<int:article_id>/comments")
