@@ -54,7 +54,8 @@ class TestArticleComments:
         if articles:
             resp = client.get(f"/api/articles/{articles[0]['id']}/comments")
             assert resp.status_code == 200
-            assert isinstance(resp.get_json()["data"], list)
+            data = resp.get_json()["data"]
+            assert isinstance(data.get("comments", []), list)
 
     def test_add_comment(self, client, auth_headers):
         list_resp = client.get("/api/articles")

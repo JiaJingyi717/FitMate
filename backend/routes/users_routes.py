@@ -1,9 +1,10 @@
 from flask import Blueprint, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
+from werkzeug.security import generate_password_hash
 
 from models.achievement import Achievement, UserAchievement
 from models.user import User
-from services.user_service import update_user_profile
+from services.user_service import get_user_stats, update_user_profile, verify_password
 from utils.extensions import db
 from utils.response import fail, ok
 
@@ -17,15 +18,29 @@ def get_profile():
     user = db.session.get(User, user_id)
     if not user:
         return fail("user not found", 404)
+
+    bmi = None
+    if user.height and user.weight and user.height > 0:
+        bmi = round(user.weight / ((user.height / 100) ** 2), 1)
+
+    join_date = ""
+    if user.join_date:
+        join_date = user.join_date.strftime("%Y年%m月")
+
     return ok({
         "id": user.id,
         "username": user.username,
-        "nickname": user.nickname,
+        "email": user.email,
+        "phone": user.phone,
+        "name": user.name,
         "avatar": user.avatar,
         "gender": user.gender,
+        "age": user.age,
         "height": user.height,
         "weight": user.weight,
-        "age": user.age,
+        "bmi": bmi,
+        "location": user.location,
+        "joinDate": join_date,
         "goal": user.goal,
         "currentCoachId": user.current_coach_id,
     })
@@ -41,15 +56,29 @@ def update_profile():
 
     payload = request.get_json(silent=True) or {}
     update_user_profile(user, payload)
-    return ok(message="profile updated")
+    return ok(msg="profile updated")
+
+
+@users_bp.put("/users/profile/avatar")
+@jwt_required()
+def update_avatar():
+    user_id = int(get_jwt_identity())
+    user = db.session.get(User, user_id)
+    if not user:
+        return fail("user not found", 404)
+
+    payload = request.get_json(silent=True) or {}
+    avatar_url = payload.get("avatar", "")
+    user.avatar = avatar_url
+    db.session.commit()
+    return ok({"avatar": avatar_url}, "avatar updated")
 
 
 @users_bp.get("/users/stats")
 @jwt_required()
-def get_user_stats():
+def get_user_stats_route():
     user_id = int(get_jwt_identity())
-    from services.analytics_service import build_overview
-    return ok(build_overview(user_id))
+    return ok(get_user_stats(user_id))
 
 
 @users_bp.get("/users/achievements")
@@ -64,7 +93,7 @@ def get_achievements():
     return ok([
         {
             "id": a.id,
-            "title": a.title,
+            "name": a.achievement_name,
             "description": a.description,
             "icon": a.icon,
             "badgeType": a.badge_type,
@@ -87,12 +116,12 @@ def change_password():
     new_password = payload.get("newPassword", "")
     if not old_password or not new_password:
         return fail("oldPassword and newPassword are required")
-    if user.password != old_password:
+    if not verify_password(user, old_password):
         return fail("old password is incorrect", 400)
 
-    user.password = new_password
+    user.password = generate_password_hash(new_password)
     db.session.commit()
-    return ok(message="password changed")
+    return ok(msg="password changed")
 
 
 @users_bp.delete("/users/account")
@@ -105,4 +134,4 @@ def delete_account():
 
     db.session.delete(user)
     db.session.commit()
-    return ok(message="account deleted")
+    return ok(msg="account deleted")
