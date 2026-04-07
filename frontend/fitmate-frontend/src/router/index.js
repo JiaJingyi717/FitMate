@@ -14,6 +14,7 @@ const routes = [
   { path: '/home', component: Home },
   { path: '/plan', component: Plan },
   { path: '/knowledge', component: Knowledge },
+  { path: '/knowledge/:id', component: Knowledge },
   { path: '/analysis', component: Analysis },
   { path: '/profile', component: Profile }
 ]
