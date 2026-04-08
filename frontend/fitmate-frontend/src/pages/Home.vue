@@ -73,40 +73,63 @@
               </svg>
               AI教练对话
             </h3>
-            <div v-if="isSpeaking" class="speaking-status">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-                <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
-                <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
-              </svg>
-              <span>语音回复中...</span>
+            <div class="header-actions">
+              <div v-if="isSpeaking" class="speaking-status">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                </svg>
+                <span>回复中...</span>
+              </div>
+              <button v-if="messages.length > 1" class="reset-btn" @click="handleResetSession" title="新对话">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                  <path d="M3 3v5h5"/>
+                </svg>
+                新对话
+              </button>
             </div>
           </div>
 
           <!-- Messages -->
           <div ref="messagesContainer" class="messages-container">
+            <!-- Loading State -->
+            <div v-if="isLoading && messages.length === 0" class="loading-state">
+              <div class="loading-spinner"></div>
+              <span>正在连接教练...</span>
+            </div>
+
             <div
               v-for="msg in messages"
               :key="msg.id"
               class="message-wrapper"
-              :class="{ 'user-message': msg.sender === 'user' }"
+              :class="{ 'user-message': msg.sender === 'user', 'system-message': msg.sender === 'system' }"
             >
-              <div class="message-bubble" :class="{ 'user-bubble': msg.sender === 'user' }">
+              <!-- 系统消息 -->
+              <div v-if="msg.sender === 'system'" class="message-bubble system-bubble">
                 <p class="message-text">{{ msg.text }}</p>
-                <span class="message-time">{{ msg.time }}</span>
               </div>
 
-              <!-- Recommendation Card -->
-              <div v-if="msg.recommendation" class="recommendation-card" @click="handleRecommendation(msg.recommendation.link)">
-                <span class="recommendation-icon">{{ msg.recommendation.icon }}</span>
-                <div class="recommendation-content">
-                  <h4 class="recommendation-title">{{ msg.recommendation.title }}</h4>
-                  <p class="recommendation-desc">{{ msg.recommendation.description }}</p>
+              <!-- 普通消息 -->
+              <template v-else>
+                <div class="message-bubble" :class="{ 'user-bubble': msg.sender === 'user' }">
+                  <p class="message-text">{{ msg.text }}</p>
+                  <span class="message-time">{{ msg.time }}</span>
                 </div>
-                <svg class="recommendation-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M9 18l6-6-6-6"/>
-                </svg>
-              </div>
+
+                <!-- Recommendation Card -->
+                <div v-if="msg.recommendation" class="recommendation-card" @click="handleRecommendation(msg.recommendation.link)">
+                  <span class="recommendation-icon">{{ msg.recommendation.icon }}</span>
+                  <div class="recommendation-content">
+                    <h4 class="recommendation-title">{{ msg.recommendation.title }}</h4>
+                    <p class="recommendation-desc">{{ msg.recommendation.description }}</p>
+                  </div>
+                  <svg class="recommendation-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 18l6-6-6-6"/>
+                  </svg>
+                </div>
+              </template>
             </div>
           </div>
 
@@ -169,43 +192,52 @@
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted } from 'vue'
+import { ref, nextTick, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { initCoachSession, switchCoach, sendCoachMessage, resetCoachSession } from '../api/coach'
 
 const router = useRouter()
 
+// 状态
 const gender = ref('male')
 const personality = ref('gentle')
 const inputMessage = ref('')
 const isRecording = ref(false)
 const isSpeaking = ref(false)
+const isLoading = ref(false)
 const messagesContainer = ref(null)
+const errorMessage = ref('')
+const currentCoach = ref({
+  id: 1,
+  name: '小雅教练',
+  gender: 'female',
+  personality: 'gentle',
+  introduction: '温柔鼓励型教练，擅长减脂指导与心理陪伴'
+})
 
+// 个性化设置选项
 const personalities = [
   { value: 'gentle', label: '温柔', icon: '😊', colorClass: 'gentle' },
   { value: 'strict', label: '严格', icon: '⚡', colorClass: 'strict' },
   { value: 'energetic', label: '活力', icon: '✨', colorClass: 'energetic' }
 ]
 
+// 快捷建议
 const quickSuggestions = [
   { icon: '💪', text: '帮我生成一个训练计划' },
   { icon: '📊', text: '我的训练数据怎么样？' },
   { icon: '📚', text: '如何正确做深蹲？' }
 ]
 
-const messages = ref([
-  {
-    id: 1,
-    sender: 'coach',
-    text: '你好！我是你的AI健身教练，很高兴认识你。让我们一起开始健康之旅吧！我可以帮你制定训练计划、解答健身问题、分析你的数据。有什么我可以帮助你的吗？',
-    time: '10:00'
-  }
-])
+// 消息列表
+const messages = ref([])
 
+// 意图检测 - 识别用户消息中的导航意图
 const detectIntent = (text) => {
   const lowerText = text.toLowerCase()
 
-  if (lowerText.includes('训练计划') || lowerText.includes('计划') || lowerText.includes('制定')) {
+  if (lowerText.includes('训练计划') || lowerText.includes('计划') || lowerText.includes('制定') ||
+      lowerText.includes('生成') || lowerText.includes('安排')) {
     return {
       title: '训练计划',
       description: '点击查看和创建你的个性化训练计划',
@@ -214,7 +246,8 @@ const detectIntent = (text) => {
     }
   }
 
-  if (lowerText.includes('数据') || lowerText.includes('分析') || lowerText.includes('统计') || lowerText.includes('进度')) {
+  if (lowerText.includes('数据') || lowerText.includes('分析') || lowerText.includes('统计') ||
+      lowerText.includes('进度') || lowerText.includes('怎么样')) {
     return {
       title: '数据分析',
       description: '查看你的训练数据和进度分析',
@@ -223,7 +256,8 @@ const detectIntent = (text) => {
     }
   }
 
-  if (lowerText.includes('知识') || lowerText.includes('学习') || lowerText.includes('怎么') || lowerText.includes('如何')) {
+  if (lowerText.includes('知识') || lowerText.includes('学习') || lowerText.includes('深蹲') ||
+      lowerText.includes('怎么') || lowerText.includes('如何') || lowerText.includes('教程')) {
     return {
       title: '健身知识库',
       description: '探索专业的健身知识和教程',
@@ -235,98 +269,172 @@ const detectIntent = (text) => {
   return null
 }
 
-const generateAIResponse = (userMessage) => {
-  const recommendation = detectIntent(userMessage)
-  const lowerMessage = userMessage.toLowerCase()
-
-  let responseText = ''
-
-  if (recommendation) {
-    if (recommendation.link === '/plan') {
-      const responses = {
-        gentle: '当然可以！我可以帮你制定训练计划。根据你的目标和体能状况，我会为你设计最适合的方案。',
-        strict: '很好！制定计划是成功的第一步。我会为你设计高效的训练方案，准备好接受挑战了吗？',
-        energetic: '太棒了！让我们一起制定一个让你充满活力的训练计划吧！💪'
-      }
-      responseText = responses[personality.value]
-    } else if (recommendation.link === '/analysis') {
-      const responses = {
-        gentle: '我来帮你查看数据。通过数据分析，我们可以更好地了解你的进步哦~',
-        strict: '数据不会说谎！让我们看看你的训练成果，找出还需要改进的地方。',
-        energetic: '让我们一起看看你的精彩成绩！你的进步一定会让你惊喜的！🔥'
-      }
-      responseText = responses[personality.value]
-    } else if (recommendation.link === '/knowledge') {
-      const responses = {
-        gentle: '好问题！我们的知识库里有很多专业的健身知识，我带你去看看~',
-        strict: '学习是进步的关键。知识库里有你需要的答案，去好好学习吧！',
-        energetic: '太好了！学习让我们变得更强！知识库里有超多有用的内容等着你！'
-      }
-      responseText = responses[personality.value]
-    }
-  } else {
-    const generalResponses = {
-      gentle: '我理解你的想法。让我们一步一步来，不要着急哦~ 💪',
-      strict: '很好！保持这样的态度。记住，没有付出就没有收获！',
-      energetic: '太棒了！你的热情让我也充满活力！让我们一起加油吧！🔥'
-    }
-    responseText = generalResponses[personality.value]
-  }
-
-  return { text: responseText, recommendation }
+// 显示错误提示
+function showError(msg) {
+  errorMessage.value = msg
+  setTimeout(() => {
+    errorMessage.value = ''
+  }, 3000)
 }
 
-const handleSendMessage = () => {
-  if (!inputMessage.value.trim()) return
-
-  const now = new Date()
-  const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
-
-  const newMessage = {
-    id: messages.value.length + 1,
-    sender: 'user',
-    text: inputMessage.value,
-    time: timeStr
-  }
-
-  messages.value.push(newMessage)
-  inputMessage.value = ''
-
-  // Scroll to bottom
+// 滚动到底部
+function scrollToBottom() {
   nextTick(() => {
     if (messagesContainer.value) {
       messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
     }
   })
-
-  // Simulate AI response
-  setTimeout(() => {
-    const { text, recommendation } = generateAIResponse(newMessage.text)
-
-    const aiResponse = {
-      id: messages.value.length + 1,
-      sender: 'coach',
-      text: text,
-      time: timeStr,
-      recommendation: recommendation || undefined
-    }
-
-    messages.value.push(aiResponse)
-
-    // Simulate speaking animation
-    isSpeaking.value = true
-    setTimeout(() => {
-      isSpeaking.value = false
-    }, 2000 + Math.random() * 1000)
-
-    nextTick(() => {
-      if (messagesContainer.value) {
-        messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
-      }
-    })
-  }, 1000)
 }
 
+// 获取当前时间字符串
+function getTimeStr() {
+  const now = new Date()
+  return `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
+}
+
+// 初始化会话 - 加载欢迎语和历史消息
+async function loadCoachSession() {
+  isLoading.value = true
+  try {
+    const res = await initCoachSession()
+    if (res.code === 200 && res.data) {
+      const { coach, messages: historyMessages } = res.data
+
+      // 设置当前教练信息
+      if (coach) {
+        currentCoach.value = coach
+        gender.value = coach.gender === 'male' ? 'male' : 'female'
+        personality.value = coach.personality || 'gentle'
+      }
+
+      // 设置历史消息或欢迎语
+      if (historyMessages && historyMessages.length > 0) {
+        messages.value = historyMessages
+      } else if (res.data.welcomeMessage) {
+        messages.value = [{
+          id: 1,
+          sender: 'coach',
+          text: res.data.welcomeMessage,
+          time: getTimeStr()
+        }]
+      }
+    }
+  } catch (error) {
+    console.error('初始化会话失败:', error)
+    // 降级：使用默认欢迎语
+    messages.value = [{
+      id: 1,
+      sender: 'coach',
+      text: '你好！我是你的AI健身教练，很高兴认识你。让我们一起开始健康之旅吧！有什么我可以帮助你的吗？',
+      time: getTimeStr()
+    }]
+  } finally {
+    isLoading.value = false
+    scrollToBottom()
+  }
+}
+
+// 切换教练设置 - 调用API保存设置
+async function handleSwitchCoach() {
+  try {
+    const res = await switchCoach({
+      coachGender: gender.value,
+      coachPersonality: personality.value
+    })
+    if (res.code === 200) {
+      // 添加系统提示消息
+      const coachNames = {
+        male: '小帅教练',
+        female: '小雅教练'
+      }
+      const personalityNames = {
+        gentle: '温柔鼓励型',
+        strict: '严格激励型',
+        energetic: '活力四射型'
+      }
+
+      messages.value.push({
+        id: Date.now(),
+        sender: 'system',
+        text: `已切换到${coachNames[gender.value]}（${personalityNames[personality.value]}）`,
+        time: getTimeStr()
+      })
+      scrollToBottom()
+    }
+  } catch (error) {
+    console.error('切换教练失败:', error)
+    showError('切换教练失败，请重试')
+  }
+}
+
+// 监听教练设置变化，自动切换
+watch([gender, personality], () => {
+  handleSwitchCoach()
+})
+
+// 发送消息
+async function handleSendMessage() {
+  const text = inputMessage.value.trim()
+  if (!text || isLoading.value) return
+
+  const timeStr = getTimeStr()
+
+  // 添加用户消息
+  const userMsg = {
+    id: Date.now(),
+    sender: 'user',
+    text: text,
+    time: timeStr
+  }
+  messages.value.push(userMsg)
+  inputMessage.value = ''
+  scrollToBottom()
+
+  isLoading.value = true
+  isSpeaking.value = true
+
+  try {
+    const res = await sendCoachMessage({ message: text })
+
+    if (res.code === 200 && res.data) {
+      const { reply, recommendation } = res.data
+
+      // 如果API没有返回推荐卡片，则根据用户消息意图检测
+      const intentRecommendation = recommendation || detectIntent(text)
+
+      // 添加AI回复
+      const aiMsg = {
+        id: Date.now() + 1,
+        sender: 'coach',
+        text: reply,
+        time: getTimeStr(),
+        recommendation: intentRecommendation
+      }
+      messages.value.push(aiMsg)
+    } else {
+      throw new Error(res.message || '获取回复失败')
+    }
+  } catch (error) {
+    console.error('发送消息失败:', error)
+    // 尝试检测意图并添加推荐卡片
+    const intentRecommendation = detectIntent(text)
+
+    // 添加错误消息
+    messages.value.push({
+      id: Date.now() + 1,
+      sender: 'coach',
+      text: '抱歉，我现在无法回复你，请稍后再试。',
+      time: getTimeStr(),
+      recommendation: intentRecommendation
+    })
+  } finally {
+    isLoading.value = false
+    isSpeaking.value = false
+    scrollToBottom()
+  }
+}
+
+// 语音输入
 const handleVoiceInput = () => {
   isRecording.value = !isRecording.value
 
@@ -337,13 +445,40 @@ const handleVoiceInput = () => {
   }
 }
 
+// 设置输入框内容
 const setInputMessage = (text) => {
   inputMessage.value = text
 }
 
+// 处理推荐卡片点击
 const handleRecommendation = (link) => {
   router.push(link)
 }
+
+// 重置会话
+async function handleResetSession() {
+  if (confirm('确定要清空聊天记录并开始新对话吗？')) {
+    isLoading.value = true
+    try {
+      const res = await resetCoachSession()
+      if (res.code === 200) {
+        messages.value = []
+        // 重新加载欢迎语
+        await loadCoachSession()
+      }
+    } catch (error) {
+      console.error('重置会话失败:', error)
+      showError('重置会话失败，请重试')
+    } finally {
+      isLoading.value = false
+    }
+  }
+}
+
+// 页面加载时初始化
+onMounted(() => {
+  loadCoachSession()
+})
 </script>
 
 <style scoped>
@@ -569,6 +704,31 @@ const handleRecommendation = (link) => {
   animation: pulse 1s infinite;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.reset-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: #f3f4f6;
+  border: none;
+  border-radius: 16px;
+  font-size: 12px;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.reset-btn:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
 .messages-container {
   flex: 1;
   overflow-y: auto;
@@ -576,6 +736,26 @@ const handleRecommendation = (link) => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
 
 .message-wrapper {
@@ -598,6 +778,18 @@ const handleRecommendation = (link) => {
 
 .message-wrapper.user-message {
   align-items: flex-end;
+}
+
+.message-wrapper.system-message {
+  align-items: center;
+}
+
+.system-bubble {
+  background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+  border: 1px dashed #93c5fd;
+  color: #0369a1;
+  font-size: 13px;
+  text-align: center;
 }
 
 .message-bubble {

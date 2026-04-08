@@ -14,6 +14,11 @@
 
       <!-- Login/Register Card -->
       <div class="auth-card">
+        <!-- 错误提示 -->
+        <div v-if="errorMessage" class="error-toast">
+          {{ errorMessage }}
+        </div>
+
         <!-- Tabs -->
         <div class="auth-tabs">
           <button
@@ -198,13 +203,16 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { login, register } from '../api/auth'
+import { login, register, logout } from '../api/auth'
 
 const router = useRouter()
 const activeTab = ref('login')
 const loading = ref(false)
 const rememberMe = ref(false)
 const agreeTerms = ref(false)
+
+// 错误消息
+const errorMessage = ref('')
 
 const loginForm = ref({
   email: '',
@@ -219,51 +227,139 @@ const registerForm = ref({
   confirmPassword: ''
 })
 
+// 清除错误消息
+function clearError() {
+  errorMessage.value = ''
+}
+
+// 显示错误提示
+function showError(msg) {
+  errorMessage.value = msg
+  setTimeout(() => {
+    clearError()
+  }, 3000)
+}
+
 async function handleLogin() {
+  // 基础验证
+  if (!loginForm.value.email || !loginForm.value.password) {
+    showError('请输入邮箱和密码')
+    return
+  }
+
   loading.value = true
+  clearError()
+
   try {
     const res = await login({
       email: loginForm.value.email,
       password: loginForm.value.password
     })
 
-    if (res.data && res.data.token) {
-      localStorage.setItem('token', res.data.token)
-    }
+    // 检查响应
+    if (res.code === 200 && res.data) {
+      // 保存 token
+      const token = res.data.token
+      if (token) {
+        // 根据"记住我"决定存储方式
+        if (rememberMe.value) {
+          // 记住我：存储到 localStorage，过期时间 7 天
+          localStorage.setItem('token', token)
+          localStorage.setItem('tokenExpiry', String(Date.now() + 7 * 24 * 60 * 60 * 1000))
+        } else {
+          // 不记住：存储到 sessionStorage
+          sessionStorage.setItem('token', token)
+        }
+      }
 
-    alert('登录成功')
-    router.push('/home')
+      // 保存用户ID到 localStorage
+      if (res.data.userId) {
+        localStorage.setItem('userId', res.data.userId)
+      }
+
+      // 注册成功后跳转
+      router.push('/home')
+    } else {
+      showError(res.message || '登录失败')
+    }
   } catch (error) {
+    // 错误已由 request 拦截器处理，这里显示友好提示
+    const msg = error.response?.data?.message || error.message || '登录失败，请检查邮箱和密码'
+    showError(msg)
     console.error('登录失败：', error)
-    alert('登录失败，请检查邮箱和密码')
   } finally {
     loading.value = false
   }
 }
 
 async function handleRegister() {
+  // 验证密码确认
   if (registerForm.value.password !== registerForm.value.confirmPassword) {
-    alert('两次输入的密码不一致！')
+    showError('两次输入的密码不一致')
+    return
+  }
+
+  // 验证密码长度
+  if (registerForm.value.password.length < 6) {
+    showError('密码至少需要6位')
+    return
+  }
+
+  // 验证同意条款
+  if (!agreeTerms.value) {
+    showError('请阅读并同意用户协议和隐私政策')
     return
   }
 
   loading.value = true
+  clearError()
+
   try {
-    await register({
+    const res = await register({
       name: registerForm.value.name,
       email: registerForm.value.email,
       phone: registerForm.value.phone,
       password: registerForm.value.password
     })
 
-    alert('注册成功，请登录')
-    activeTab.value = 'login'
-    loginForm.value.email = registerForm.value.email
+    if (res.code === 200) {
+      // 注册成功，切换到登录页面并填充邮箱
+      activeTab.value = 'login'
+      loginForm.value.email = registerForm.value.email
+      // 清空注册表单
+      registerForm.value = {
+        name: '',
+        email: '',
+        phone: '',
+        password: '',
+        confirmPassword: ''
+      }
+      showError('注册成功，请登录')
+    } else {
+      showError(res.message || '注册失败')
+    }
   } catch (error) {
+    const msg = error.response?.data?.message || error.message || '注册失败，请稍后重试'
+    showError(msg)
     console.error('注册失败：', error)
-    alert('注册失败，请稍后重试')
   } finally {
     loading.value = false
+  }
+}
+
+// 退出登录函数（供其他地方调用）
+async function handleLogout() {
+  try {
+    await logout()
+  } catch (e) {
+    console.error('退出登录请求失败', e)
+  } finally {
+    // 清除所有存储
+    localStorage.removeItem('token')
+    localStorage.removeItem('tokenExpiry')
+    localStorage.removeItem('userId')
+    sessionStorage.removeItem('token')
+    router.push('/login')
   }
 }
 </script>
@@ -322,6 +418,34 @@ async function handleRegister() {
   padding: 32px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
   border: 1px solid #e0f2fe;
+  position: relative;
+}
+
+.error-toast {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  padding: 12px 16px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #dc2626;
+  font-size: 14px;
+  text-align: center;
+  animation: slideDown 0.3s ease;
+  z-index: 10;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .auth-tabs {
