@@ -35,7 +35,7 @@
         </div>
         <div class="stat-info">
           <span class="stat-label">总训练时长</span>
-          <span class="stat-value">{{ currentStats.totalDuration }}分钟</span>
+          <span class="stat-value">{{ overviewData.totalDuration }}分钟</span>
         </div>
       </div>
 
@@ -50,7 +50,7 @@
         </div>
         <div class="stat-info">
           <span class="stat-label">消耗卡路里</span>
-          <span class="stat-value">{{ currentStats.totalCalories }}</span>
+          <span class="stat-value">{{ overviewData.totalCalories }}</span>
         </div>
       </div>
 
@@ -62,7 +62,7 @@
         </div>
         <div class="stat-info">
           <span class="stat-label">训练次数</span>
-          <span class="stat-value">{{ currentStats.totalWorkouts }}次</span>
+          <span class="stat-value">{{ overviewData.trainingCount }}次</span>
         </div>
       </div>
 
@@ -74,7 +74,7 @@
         </div>
         <div class="stat-info">
           <span class="stat-label">平均时长</span>
-          <span class="stat-value">{{ currentStats.avgDuration }}分钟</span>
+          <span class="stat-value">{{ overviewData.avgDuration }}分钟</span>
         </div>
       </div>
     </div>
@@ -123,19 +123,60 @@
       <!-- Duration Trend -->
       <div class="chart-card">
         <h3 class="chart-title">训练时长趋势</h3>
-        <div class="chart-content bar-chart">
-          <div class="bar-container">
-            <div
-              v-for="(item, index) in trendData"
-              :key="index"
-              class="bar-wrapper"
-            >
-              <div class="bar" :style="{ height: getBarHeight(item.duration) + '%' }">
-                <span class="bar-value">{{ item.duration }}分钟</span>
-              </div>
-              <span class="bar-label">{{ item.label }}</span>
-            </div>
-          </div>
+        <div class="chart-content line-chart">
+          <svg class="line-svg" :viewBox="`0 0 ${chartWidth} ${chartHeight}`" preserveAspectRatio="xMidYMid meet">
+            <defs>
+              <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#2563eb" />
+                <stop offset="100%" stop-color="#06b6d4" />
+              </linearGradient>
+            </defs>
+            <!-- Y轴网格线 -->
+            <line
+              v-for="(y, index) in yGridLines"
+              :key="'grid-' + index"
+              :x1="padding.left"
+              :y1="y"
+              :x2="chartWidth - padding.right"
+              :y2="y"
+              class="grid-line"
+            />
+            <!-- Y轴标签：右对齐，避免文字向右伸入绘图区与折线重叠 -->
+            <text
+              v-for="(y, index) in yGridLines"
+              :key="'y-label-' + index"
+              :x="yAxisLabelX"
+              :y="y + 4"
+              class="axis-label"
+              text-anchor="end"
+            >{{ Math.round(maxDuration * (1 - index / 4)) }}分钟</text>
+            <!-- 折线 -->
+            <polyline
+              :points="linePoints"
+              class="trend-line"
+            />
+            <!-- 数据点 -->
+            <circle
+              v-for="(point, index) in linePointsArr"
+              :key="'point-' + index"
+              :cx="point.x"
+              :cy="point.y"
+              :r="point.highlighted ? 6 : 4"
+              class="data-point"
+              :class="{ highlighted: point.highlighted }"
+              @mouseenter="highlightedIndex = index"
+              @mouseleave="highlightedIndex = -1"
+            />
+            <!-- X轴标签 -->
+            <text
+              v-for="(item, index) in visibleXLabels"
+              :key="'x-label-' + index"
+              :x="item.x"
+              :y="chartHeight - padding.bottom + 20"
+              class="axis-label"
+              text-anchor="middle"
+            >{{ item.label }}</text>
+          </svg>
         </div>
       </div>
     </div>
@@ -184,99 +225,205 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { getAnalyticsOverview, getCategoryDistribution, getDurationTrend, getAiSuggestions } from '../api/analytics.js'
 
 const timeRange = ref('7days')
+const loading = ref(false)
 
-const last7DaysData = [
-  { id: '7d-1', day: '3/6', duration: 45 },
-  { id: '7d-2', day: '3/7', duration: 60 },
-  { id: '7d-3', day: '3/8', duration: 30 },
-  { id: '7d-4', day: '3/9', duration: 55 },
-  { id: '7d-5', day: '3/10', duration: 40 },
-  { id: '7d-6', day: '3/11', duration: 75 },
-  { id: '7d-7', day: '3/12', duration: 50 }
-]
-
-const last30DaysData = [
-  { id: '30d-1', date: '2/13-2/19', duration: 245 },
-  { id: '30d-2', date: '2/20-2/26', duration: 280 },
-  { id: '30d-3', date: '2/27-3/5', duration: 210 },
-  { id: '30d-4', date: '3/6-3/12', duration: 355 }
-]
-
-const categoryData = [
-  { id: 'cat-1', name: '力量训练', value: 35, color: '#2563eb' },
-  { id: 'cat-2', name: '有氧运动', value: 30, color: '#06b6d4' },
-  { id: 'cat-3', name: 'HIIT', value: 20, color: '#3b82f6' },
-  { id: 'cat-4', name: '拉伸放松', value: 15, color: '#60a5fa' }
-]
-
-const aiSuggestions = [
-  {
-    id: 1,
-    title: '训练频率优秀',
-    description: '本周完成7次训练，达成了设定目标！保持这个节奏能够获得更好的训练效果。',
-    gradient: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
-    iconPath: '<circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/>'
-  },
-  {
-    id: 2,
-    title: '建议增加力量训练',
-    description: '根据数据分析，你的有氧训练占比较高。建议增加力量训练来提升肌肉力量和基础代谢。',
-    gradient: 'linear-gradient(135deg, #0891b2, #06b6d4)',
-    iconPath: '<circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/>'
-  },
-  {
-    id: 3,
-    title: '注意训练强度变化',
-    description: '连续高强度训练后，建议安排1-2天的低强度恢复训练，避免过度疲劳和运动损伤。',
-    gradient: 'linear-gradient(135deg, #2563eb, #06b6d4)',
-    iconPath: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>'
-  }
-]
-
-const currentStats = computed(() => {
-  if (timeRange.value === '7days') {
-    const totalDuration = last7DaysData.reduce((sum, item) => sum + item.duration, 0)
-    const totalCalories = last7DaysData.reduce((sum, item) => sum + item.duration * 7, 0)
-    return {
-      totalDuration,
-      totalCalories,
-      totalWorkouts: 7,
-      avgDuration: Math.round(totalDuration / last7DaysData.length)
-    }
-  } else {
-    const totalDuration = last30DaysData.reduce((sum, item) => sum + item.duration, 0)
-    const totalCalories = last30DaysData.reduce((sum, item) => sum + item.duration * 7, 0)
-    return {
-      totalDuration,
-      totalCalories,
-      totalWorkouts: 22,
-      avgDuration: Math.round(totalDuration / last30DaysData.length)
-    }
-  }
+// API 数据
+const overviewData = ref({
+  totalDuration: 0,
+  totalCalories: 0,
+  trainingCount: 0,
+  avgDuration: 0
 })
 
-const trendData = computed(() => {
-  if (timeRange.value === '7days') {
-    return last7DaysData.map(item => ({
-      label: item.day,
-      duration: item.duration
-    }))
-  } else {
-    return last30DaysData.map(item => ({
-      label: item.date.split('-')[0],
-      duration: item.duration
+const categoryData = ref([])
+const trendData = ref([])
+const aiSuggestions = ref([])
+
+// 颜色映射
+const colorMap = ['#2563eb', '#06b6d4', '#3b82f6', '#60a5fa', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6']
+
+// 加载数据
+const loadData = async () => {
+  loading.value = true
+  const range = timeRange.value === '7days' ? '7d' : '30d'
+
+  try {
+    // 并行请求所有数据
+    const [overviewRes, categoryRes, trendRes, aiRes] = await Promise.all([
+      getAnalyticsOverview({ range }),
+      getCategoryDistribution({ range }),
+      getDurationTrend({ range }),
+      getAiSuggestions({ range })
+    ])
+
+    // 处理总览数据
+    if (overviewRes.code === 200 && overviewRes.data) {
+      overviewData.value = {
+        totalDuration: overviewRes.data.totalDuration || 0,
+        totalCalories: overviewRes.data.totalCalories || 0,
+        trainingCount: overviewRes.data.trainingCount || 0,
+        avgDuration: overviewRes.data.avgDuration || 0
+      }
+    }
+
+    // 处理分类数据
+    if (categoryRes.code === 200 && categoryRes.data) {
+      categoryData.value = categoryRes.data.map((item, index) => ({
+        id: `cat-${index}`,
+        name: item.category,
+        value: item.percentage,
+        color: colorMap[index % colorMap.length]
+      }))
+    }
+
+    // 处理趋势数据
+    if (trendRes.code === 200 && trendRes.data) {
+      trendData.value = trendRes.data.map(item => ({
+        label: item.date,
+        duration: item.duration
+      }))
+    }
+
+    // 处理 AI 建议
+    if (aiRes.code === 200 && aiRes.data) {
+      aiSuggestions.value = aiRes.data.map((suggestion, index) => ({
+        id: index + 1,
+        title: getSuggestionTitle(suggestion, index),
+        description: suggestion,
+        gradient: getSuggestionGradient(index),
+        iconPath: getSuggestionIcon(index)
+      }))
+    }
+  } catch (error) {
+    console.error('加载分析数据失败:', error)
+  } finally {
+    loading.value = false
+  }
+}
+
+// 获取建议标题
+const getSuggestionTitle = (suggestion, index) => {
+  const titles = ['个性化训练建议', '优化训练方案', '健康提示']
+  return titles[index % titles.length]
+}
+
+// 获取建议渐变色
+const getSuggestionGradient = (index) => {
+  const gradients = [
+    'linear-gradient(135deg, #2563eb, #1d4ed8)',
+    'linear-gradient(135deg, #0891b2, #06b6d4)',
+    'linear-gradient(135deg, #10b981, #059669)'
+  ]
+  return gradients[index % gradients.length]
+}
+
+// 获取建议图标
+const getSuggestionIcon = (index) => {
+  const icons = [
+    '<circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/>',
+    '<circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/>',
+    '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>'
+  ]
+  return icons[index % icons.length]
+}
+
+// 转换 API range 参数
+const apiRange = computed(() => timeRange.value === '7days' ? '7d' : '30d')
+
+// 监听时间范围变化
+watch(timeRange, () => {
+  loadData()
+})
+
+// 初始化加载
+onMounted(() => {
+  loadData()
+})
+
+// 折线图相关计算属性
+const chartWidth = 560
+const chartHeight = 200
+// 左侧留白：容纳「右对齐」的 Y 轴刻度文字（文字向左延伸，不占用绘图区）
+const padding = { top: 20, right: 20, bottom: 40, left: 64 }
+const yAxisLabelX = padding.left - 12
+const highlightedIndex = ref(-1)
+
+const chartData = computed(() => {
+  if (trendData.value.length === 0) return []
+  const max = maxDuration.value
+  const chartWidthInner = chartWidth - padding.left - padding.right
+  const chartHeightInner = chartHeight - padding.top - padding.bottom
+
+  return trendData.value.map((item, index) => {
+    const x = padding.left + (index / (trendData.value.length - 1 || 1)) * chartWidthInner
+    const y = padding.top + chartHeightInner - (item.duration / max) * chartHeightInner
+    return {
+      x,
+      y,
+      label: item.label,
+      duration: item.duration,
+      highlighted: index === highlightedIndex.value
+    }
+  })
+})
+
+const linePoints = computed(() => {
+  return chartData.value.map(p => `${p.x},${p.y}`).join(' ')
+})
+
+const linePointsArr = computed(() => chartData.value)
+
+const yGridLines = computed(() => {
+  const lines = []
+  for (let i = 0; i <= 4; i++) {
+    lines.push(padding.top + ((chartHeight - padding.top - padding.bottom) / 4) * i)
+  }
+  return lines
+})
+
+// X轴标签省略逻辑
+const visibleXLabels = computed(() => {
+  const data = chartData.value
+  if (data.length === 0) return []
+
+  const labels = []
+  const dataLength = data.length
+
+  // 7天显示所有标签
+  if (dataLength <= 7) {
+    return data.map((item, index) => ({
+      x: item.x,
+      label: formatDate(item.label)
     }))
   }
+
+  // 30天每隔几天显示一个
+  const interval = Math.ceil(dataLength / 7)
+  for (let i = 0; i < dataLength; i += interval) {
+    labels.push({
+      x: data[i].x,
+      label: formatDate(data[i].label)
+    })
+  }
+
+  return labels
 })
+
+// 格式化日期显示
+const formatDate = (dateStr) => {
+  const date = new Date(dateStr)
+  return `${date.getMonth() + 1}/${date.getDate()}`
+}
 
 const pieSegments = computed(() => {
   let currentAngle = 0
   const circumference = 2 * Math.PI * 40
 
-  return categoryData.map(item => {
+  return categoryData.value.map(item => {
     const percentage = item.value / 100
     const dashArray = `${circumference * percentage} ${circumference * (1 - percentage)}`
     const offset = -circumference * currentAngle
@@ -291,7 +438,8 @@ const pieSegments = computed(() => {
 })
 
 const maxDuration = computed(() => {
-  return Math.max(...trendData.value.map(item => item.duration))
+  if (trendData.value.length === 0) return 100
+  return Math.max(...trendData.value.map(item => item.duration), 1)
 })
 
 const getBarHeight = (duration) => {
@@ -501,6 +649,50 @@ const getBarHeight = (duration) => {
   font-size: 13px;
   font-weight: 600;
   color: #1f2937;
+}
+
+/* Line Chart */
+.line-chart {
+  position: relative;
+  width: 100%;
+}
+
+.line-svg {
+  width: 100%;
+  height: 200px;
+}
+
+.grid-line {
+  stroke: #e5e7eb;
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+
+.axis-label {
+  font-size: 11px;
+  fill: #6b7280;
+}
+
+.trend-line {
+  fill: none;
+  stroke: url(#lineGradient);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.data-point {
+  fill: white;
+  stroke: #2563eb;
+  stroke-width: 2;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.data-point:hover,
+.data-point.highlighted {
+  fill: #2563eb;
+  r: 6;
 }
 
 /* Bar Chart */
