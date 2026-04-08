@@ -77,7 +77,7 @@
         <!-- 评论区域 -->
         <div class="comments-section">
           <h3 class="section-title">
-            💬 评论 ({{ comments.length }})
+            💬 评论 ({{ commentsTotal || comments.length }})
           </h3>
 
           <!-- 评论输入 -->
@@ -149,7 +149,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getArticleDetail, toggleArticleLike, toggleArticleCollect, getArticleComments, addArticleComment } from '../api/article'
 
@@ -169,15 +169,18 @@ const article = reactive({
   duration: '',
   views: 0,
   likes: 0,
+  commentCount: 0,
   publishDate: '',
   tags: [],
-  videoUrl: ''
+  videoUrl: '',
+  author: ''
 })
 const isLiked = ref(false)
 const isCollected = ref(false)
 const comments = ref([])
 const newComment = ref('')
 const relatedArticles = ref([])
+const commentsTotal = ref(0)
 
 // 计算属性
 const renderedContent = computed(() => {
@@ -218,15 +221,14 @@ function goBack() {
 
 function goToDetail(id) {
   router.push(`/knowledge/${id}`)
-  loadArticleDetail()
 }
 
 async function handleLike() {
   try {
     const res = await toggleArticleLike(article.id)
     if (res.code === 200) {
-      isLiked.value = !isLiked.value
-      article.likes += isLiked.value ? 1 : -1
+      isLiked.value = res.data.isLiked
+      article.likes = res.data.likeCount
     }
   } catch (error) {
     console.error('点赞失败:', error)
@@ -237,7 +239,7 @@ async function handleCollect() {
   try {
     const res = await toggleArticleCollect(article.id)
     if (res.code === 200) {
-      isCollected.value = !isCollected.value
+      isCollected.value = res.data.isCollected
     }
   } catch (error) {
     console.error('收藏失败:', error)
@@ -256,13 +258,14 @@ async function submitComment() {
     })
     if (res.code === 200) {
       comments.value.unshift({
-        id: Date.now(),
-        username: '我',
-        avatar: '👤',
+        id: res.data.commentId,
+        username: '当前用户',
+        avatar: '',
         content: newComment.value,
         likes: 0,
         date: '刚刚'
       })
+      article.commentCount += 1
       newComment.value = ''
       alert('评论成功')
     }
@@ -287,7 +290,7 @@ async function loadArticleDetail() {
       }
 
       // 加载评论
-      loadComments()
+      await loadComments()
     }
   } catch (error) {
     console.error('加载文章详情失败:', error)
@@ -298,20 +301,30 @@ async function loadArticleDetail() {
 
 async function loadComments() {
   try {
-    const res = await getArticleComments(article.id)
+    const res = await getArticleComments(route.params.id, { page: 1, pageSize: 20 })
     if (res.code === 200 && res.data) {
+      // 兼容不同的响应格式
       if (Array.isArray(res.data)) {
         comments.value = res.data
       } else if (res.data.comments) {
         comments.value = res.data.comments
+        commentsTotal.value = res.data.total || 0
       } else if (res.data.list) {
         comments.value = res.data.list
+        commentsTotal.value = res.data.total || 0
       }
     }
   } catch (error) {
     console.error('加载评论失败:', error)
   }
 }
+
+// 监听路由变化
+watch(() => route.params.id, () => {
+  if (route.params.id) {
+    loadArticleDetail()
+  }
+})
 
 // 初始化
 onMounted(() => {

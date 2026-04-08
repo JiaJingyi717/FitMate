@@ -18,6 +18,7 @@
           type="text"
           class="search-input"
           placeholder="搜索健身知识、训练教程..."
+          @input="onSearchChange"
         />
       </div>
     </div>
@@ -29,7 +30,7 @@
         :key="category"
         class="category-btn"
         :class="{ active: selectedCategory === category }"
-        @click="selectedCategory = category"
+        @click="selectedCategory = category; onCategoryChange()"
       >
         {{ category }}
       </button>
@@ -64,10 +65,10 @@
           >
             <div class="card-thumbnail" :style="{ background: getGradient(item.category) }">
               <span class="thumbnail-emoji">{{ item.thumbnail }}</span>
-              <div v-if="item.type === '视频'" class="play-overlay">
+              <div v-if="item.type === 'video'" class="play-overlay">
                 <div class="play-btn">▶</div>
               </div>
-              <span class="type-badge">{{ item.type }}</span>
+              <span class="type-badge">{{ item.type === 'video' ? '视频' : '文章' }}</span>
               <span v-if="item.duration" class="duration-badge">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="12" cy="12" r="10"/>
@@ -215,10 +216,10 @@
           >
             <div class="card-thumbnail" :style="{ background: getGradient(item.category) }">
               <span class="thumbnail-emoji">{{ item.thumbnail }}</span>
-              <div v-if="item.type === '视频'" class="play-overlay">
+              <div v-if="item.type === 'video'" class="play-overlay">
                 <div class="play-btn">▶</div>
               </div>
-              <span class="type-badge">{{ item.type }}</span>
+              <span class="type-badge">{{ item.type === 'video' ? '视频' : '文章' }}</span>
               <span v-if="item.duration" class="duration-badge">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="12" cy="12" r="10"/>
@@ -260,17 +261,19 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { getArticleList, toggleArticleCollect, getMyCollections, getArticleCategories } from '../api/article'
 
 const router = useRouter()
 
+// 状态
+const loading = ref(false)
 const searchQuery = ref('')
 const selectedCategory = ref('全部')
 const activeTab = ref('all')
-const bookmarkedItems = ref([1, 3])
-
-const categories = ['全部', '力量训练', '有氧运动', '营养饮食', '拉伸放松', '运动损伤']
+const bookmarkedItems = ref([])
+const categories = ref(['全部'])
 
 const tabs = [
   { value: 'all', label: '全部内容' },
@@ -279,92 +282,60 @@ const tabs = [
   { value: 'bookmarked', label: '我的收藏', icon: '📚' }
 ]
 
-const knowledgeItems = ref([
-  {
-    id: 1,
-    title: '如何正确进行深蹲训练',
-    category: '力量训练',
-    type: '视频',
-    description: '深蹲是力量训练的基础动作，本教程详细讲解正确的深蹲姿势和常见错误。',
-    duration: '12:30',
-    views: 15234,
-    likes: 892,
-    thumbnail: '🏋️'
-  },
-  {
-    id: 2,
-    title: 'HIIT高强度间歇训练完整指南',
-    category: '有氧运动',
-    type: '文章',
-    description: '了解HIIT训练的原理、好处以及如何制定适合自己的HIIT计划。',
-    views: 8932,
-    likes: 634,
-    thumbnail: '🔥'
-  },
-  {
-    id: 3,
-    title: '增肌期营养搭配建议',
-    category: '营养饮食',
-    type: '文章',
-    description: '详细介绍增肌期间应该如何安排饮食，包括蛋白质、碳水化合物和脂肪的摄入比例。',
-    views: 12456,
-    likes: 1023,
-    thumbnail: '🥗'
-  },
-  {
-    id: 4,
-    title: '10分钟全身拉伸教程',
-    category: '拉伸放松',
-    type: '视频',
-    description: '运动后的拉伸非常重要，跟随视频一起完成全身拉伸，缓解肌肉紧张。',
-    duration: '10:15',
-    views: 23456,
-    likes: 1567,
-    thumbnail: '🧘'
-  },
-  {
-    id: 5,
-    title: '跑步新手常见错误与预防',
-    category: '有氧运动',
-    type: '视频',
-    description: '跑步看似简单，但错误的姿势会导致运动损伤。本视频帮你纠正常见错误。',
-    duration: '15:20',
-    views: 18765,
-    likes: 945,
-    thumbnail: '🏃'
-  },
-  {
-    id: 6,
-    title: '运动后肌肉酸痛如何缓解',
-    category: '运动损伤',
-    type: '文章',
-    description: '了解肌肉酸痛的原因，以及如何通过正确的方法加速恢复。',
-    views: 9876,
-    likes: 567,
-    thumbnail: '💪'
-  },
-  {
-    id: 7,
-    title: '核心力量训练动作详解',
-    category: '力量训练',
-    type: '视频',
-    description: '核心力量是所有运动的基础，学习平板支撑、俄罗斯转体等经典核心训练动作。',
-    duration: '18:45',
-    views: 14532,
-    likes: 876,
-    thumbnail: '🎯'
-  },
-  {
-    id: 8,
-    title: '减脂期饮食计划推荐',
-    category: '营养饮食',
-    type: '文章',
-    description: '科学的减脂饮食不是节食，而是合理控制热量摄入并保证营养均衡。',
-    views: 16789,
-    likes: 1234,
-    thumbnail: '🍎'
+const knowledgeItems = ref([])
+
+// 加载分类
+async function loadCategories() {
+  try {
+    const res = await getArticleCategories()
+    if (res.code === 200 && res.data) {
+      categories.value = ['全部', ...res.data.map(item => item.name)]
+    }
+  } catch (error) {
+    console.error('加载分类失败:', error)
   }
-])
+}
+
+// 加载文章列表
+async function loadArticleList() {
+  loading.value = true
+  try {
+    const params = {}
+    if (selectedCategory.value !== '全部') {
+      params.category = selectedCategory.value
+    }
+    if (searchQuery.value) {
+      params.keyword = searchQuery.value
+    }
+    
+    const res = await getArticleList(params)
+    if (res.code === 200 && res.data) {
+      knowledgeItems.value = res.data
+      // 更新收藏状态
+      knowledgeItems.value.forEach(item => {
+        if (item.isCollected && !bookmarkedItems.value.includes(item.id)) {
+          bookmarkedItems.value.push(item.id)
+        }
+      })
+    }
+  } catch (error) {
+    console.error('加载文章列表失败:', error)
+  } finally {
+    loading.value = false
+  }
+}
+
+// 加载收藏列表
+async function loadCollections() {
+  try {
+    const res = await getMyCollections()
+    if (res.code === 200 && res.data) {
+      bookmarkedItems.value = res.data.map(item => item.id)
+    }
+  } catch (error) {
+    console.error('加载收藏列表失败:', error)
+  }
+}
 
 const gradients = [
   'linear-gradient(135deg, #eff6ff, #ecfeff)',
@@ -374,7 +345,7 @@ const gradients = [
 ]
 
 const getGradient = (category) => {
-  const index = categories.indexOf(category) % gradients.length
+  const index = categories.value.indexOf(category) % gradients.length
   return gradients[index]
 }
 
@@ -385,11 +356,23 @@ const formatNumber = (num) => {
   return num.toString()
 }
 
-const toggleBookmark = (id) => {
-  if (bookmarkedItems.value.includes(id)) {
-    bookmarkedItems.value = bookmarkedItems.value.filter(item => item !== id)
-  } else {
-    bookmarkedItems.value.push(id)
+async function toggleBookmark(id) {
+  try {
+    const res = await toggleArticleCollect(id)
+    if (res.code === 200) {
+      if (bookmarkedItems.value.includes(id)) {
+        bookmarkedItems.value = bookmarkedItems.value.filter(item => item !== id)
+      } else {
+        bookmarkedItems.value.push(id)
+      }
+      // 更新列表中的收藏状态
+      const item = knowledgeItems.value.find(item => item.id === id)
+      if (item) {
+        item.isCollected = res.data.isCollected
+      }
+    }
+  } catch (error) {
+    console.error('收藏操作失败:', error)
   }
 }
 
@@ -403,11 +386,11 @@ const filteredItems = computed(() => {
 })
 
 const filteredVideoItems = computed(() => {
-  return filteredItems.value.filter(item => item.type === '视频')
+  return filteredItems.value.filter(item => item.type === 'video')
 })
 
 const filteredArticleItems = computed(() => {
-  return filteredItems.value.filter(item => item.type === '文章')
+  return filteredItems.value.filter(item => item.type === 'article')
 })
 
 const filteredBookmarkedItems = computed(() => {
@@ -417,6 +400,24 @@ const filteredBookmarkedItems = computed(() => {
 const goToDetail = (id) => {
   router.push(`/knowledge/${id}`)
 }
+
+// 监听搜索和分类变化
+function onSearchChange() {
+  loadArticleList()
+}
+
+function onCategoryChange() {
+  loadArticleList()
+}
+
+// 初始化
+onMounted(async () => {
+  await Promise.all([
+    loadCategories(),
+    loadArticleList(),
+    loadCollections()
+  ])
+})
 </script>
 
 <style scoped>
