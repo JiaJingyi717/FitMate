@@ -1,6 +1,15 @@
 // src/api/plan.js
 import request from './request'
-import { mockGetPlanOverview, mockGetPlanList, mockCreatePlan, mockGetPlanDetail, mockDeletePlan, mockGenerateAiPlan } from '../mocks/plan.js'
+import {
+  mockGetPlanOverview,
+  mockGetPlanList,
+  mockCreatePlan,
+  mockGetPlanDetail,
+  mockDeletePlan,
+  mockGenerateAiPlan,
+  mockGetTodayTasks,
+  mockCompleteTodayTask
+} from '../mocks/plan.js'
 
 // 开关（非常重要）
 const USE_MOCK = true
@@ -75,6 +84,9 @@ export function generateAiPlan(data) {
 
 // 获取今日任务
 export function getTodayTasks() {
+  if (USE_MOCK) {
+    return mockGetTodayTasks()
+  }
   return request({
     url: '/api/plans/today',
     method: 'get'
@@ -83,6 +95,9 @@ export function getTodayTasks() {
 
 // 今日任务打卡 / 取消打卡
 export function completeTodayTask(taskId, data) {
+  if (USE_MOCK) {
+    return mockCompleteTodayTask(taskId, data)
+  }
   return request({
     url: `/api/plans/today/${taskId}/complete`,
     method: 'patch',
