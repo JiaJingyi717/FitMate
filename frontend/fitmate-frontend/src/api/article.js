@@ -1,6 +1,15 @@
 // src/api/article.js
 import request from './request'
-import { mockGetArticleList, mockGetArticleDetail, mockToggleArticleLike, mockToggleArticleCollect, mockGetArticleComments, mockAddArticleComment } from '../mocks/article.js'
+import { 
+  mockGetArticleList, 
+  mockGetArticleDetail, 
+  mockToggleArticleLike, 
+  mockToggleArticleCollect, 
+  mockGetArticleComments, 
+  mockAddArticleComment,
+  mockGetMyCollections,
+  mockGetArticleCategories
+} from '../mocks/article.js'
 
 // 开关（非常重要）
 const USE_MOCK = true
@@ -74,8 +83,11 @@ export function addArticleComment(id, data) {
   })
 }
 
-// 获取收藏列表
+// 获取我的收藏列表
 export function getMyCollections() {
+  if (USE_MOCK) {
+    return mockGetMyCollections()
+  }
   return request({
     url: '/api/articles/collections',
     method: 'get'
@@ -84,6 +96,9 @@ export function getMyCollections() {
 
 // 获取分类
 export function getArticleCategories() {
+  if (USE_MOCK) {
+    return mockGetArticleCategories()
+  }
   return request({
     url: '/api/articles/categories',
     method: 'get'

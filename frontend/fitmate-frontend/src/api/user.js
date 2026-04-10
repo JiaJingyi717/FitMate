@@ -1,6 +1,6 @@
 // src/api/user.js
 import request from './request'
-import { mockGetUserProfile, mockUpdateUserProfile, mockUpdateAvatar, mockGetUserStats, mockGetAchievements, mockChangePassword } from '../mocks/user.js'
+import { mockGetUserProfile, mockUpdateUserProfile, mockUpdateAvatar, mockGetUserStats, mockGetAchievements, mockChangePassword, mockDeleteAccount } from '../mocks/user.js'
 
 // 开关（非常重要）
 const USE_MOCK = true
@@ -76,6 +76,9 @@ export function changePassword(data) {
 
 // 注销账号
 export function deleteAccount() {
+  if (USE_MOCK) {
+    return mockDeleteAccount()
+  }
   return request({
     url: '/api/users/account',
     method: 'delete'
