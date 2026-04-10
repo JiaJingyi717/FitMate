@@ -94,6 +94,11 @@
 
           <!-- Messages -->
           <div ref="messagesContainer" class="messages-container">
+            <!-- Error Message -->
+            <div v-if="errorMessage" class="error-message">
+              {{ errorMessage }}
+            </div>
+
             <!-- Loading State -->
             <div v-if="isLoading && messages.length === 0" class="loading-state">
               <div class="loading-spinner"></div>
@@ -207,6 +212,9 @@ const isSpeaking = ref(false)
 const isLoading = ref(false)
 const messagesContainer = ref(null)
 const errorMessage = ref('')
+const recognitionText = ref('')
+const isVoiceSupported = ref(true)
+let recognition = null
 const currentCoach = ref({
   id: 1,
   name: '小雅教练',
@@ -434,14 +442,105 @@ async function handleSendMessage() {
   }
 }
 
-// 语音输入
-const handleVoiceInput = () => {
-  isRecording.value = !isRecording.value
+// 初始化语音识别
+function initSpeechRecognition() {
+  // 检查浏览器支持
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
 
-  if (!isRecording.value) {
-    setTimeout(() => {
-      inputMessage.value = '帮我生成一个训练计划'
-    }, 2000)
+  if (!SpeechRecognition) {
+    isVoiceSupported.value = false
+    console.warn('当前浏览器不支持语音识别，建议使用 Chrome 浏览器')
+    return null
+  }
+
+  const recognizer = new SpeechRecognition()
+  recognizer.lang = 'zh-CN'           // 设置为中文
+  recognizer.continuous = false        // 单次识别
+  recognizer.interimResults = true     // 返回临时结果
+  recognizer.maxAlternatives = 1       // 返回最佳结果
+
+  // 识别结果返回
+  recognizer.onresult = (event) => {
+    let finalTranscript = ''
+    let interimTranscript = ''
+
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript
+      if (event.results[i].isFinal) {
+        finalTranscript += transcript
+      } else {
+        interimTranscript += transcript
+      }
+    }
+
+    // 使用最终结果
+    if (finalTranscript) {
+      inputMessage.value = finalTranscript
+    }
+  }
+
+  // 识别结束
+  recognizer.onend = () => {
+    isRecording.value = false
+  }
+
+  // 识别错误处理
+  recognizer.onerror = (event) => {
+    console.error('语音识别错误:', event.error)
+    isRecording.value = false
+
+    switch (event.error) {
+      case 'not-allowed':
+        showError('请允许麦克风权限')
+        break
+      case 'no-speech':
+        showError('未检测到语音，请重试')
+        break
+      case 'network':
+        showError('网络错误，请检查网络连接')
+        break
+      default:
+        showError('语音识别失败，请重试')
+    }
+  }
+
+  return recognizer
+}
+
+// 语音输入
+async function handleVoiceInput() {
+  // 检查浏览器支持
+  if (!isVoiceSupported.value) {
+    showError('当前浏览器不支持语音识别，请使用 Chrome 浏览器')
+    return
+  }
+
+  // 如果正在录音，停止
+  if (isRecording.value && recognition) {
+    recognition.stop()
+    isRecording.value = false
+    return
+  }
+
+  // 开始录音
+  try {
+    // 初始化识别器（延迟初始化，确保 DOM 已挂载）
+    if (!recognition) {
+      recognition = initSpeechRecognition()
+    }
+
+    if (!recognition) {
+      showError('语音识别初始化失败')
+      return
+    }
+
+    isRecording.value = true
+    recognition.start()
+
+  } catch (error) {
+    console.error('启动语音识别失败:', error)
+    isRecording.value = false
+    showError('无法启动语音识别，请检查麦克风权限')
   }
 }
 
@@ -478,6 +577,9 @@ async function handleResetSession() {
 // 页面加载时初始化
 onMounted(() => {
   loadCoachSession()
+  // 检查语音识别支持
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+  isVoiceSupported.value = !!SpeechRecognition
 })
 </script>
 
@@ -756,6 +858,17 @@ onMounted(() => {
   border-top-color: #2563eb;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
+}
+
+.error-message {
+  padding: 12px 16px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #dc2626;
+  font-size: 13px;
+  text-align: center;
+  margin-bottom: 8px;
 }
 
 .message-wrapper {

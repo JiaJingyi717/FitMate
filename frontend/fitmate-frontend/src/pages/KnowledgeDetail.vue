@@ -103,9 +103,6 @@
                   <span class="comment-date">{{ comment.date }}</span>
                 </div>
                 <p class="comment-text">{{ comment.content }}</p>
-                <button class="comment-like-btn">
-                  👍 {{ comment.likes }}
-                </button>
               </div>
             </div>
           </div>
@@ -262,7 +259,6 @@ async function submitComment() {
         username: '当前用户',
         avatar: '',
         content: newComment.value,
-        likes: 0,
         date: '刚刚'
       })
       article.commentCount += 1
@@ -713,21 +709,6 @@ onMounted(() => {
   color: #4b5563;
   margin: 0 0 8px 0;
   line-height: 1.5;
-}
-
-.comment-like-btn {
-  background: none;
-  border: none;
-  font-size: 12px;
-  color: #6b7280;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
-  transition: all 0.2s;
-}
-
-.comment-like-btn:hover {
-  background: #e5e7eb;
 }
 
 /* 侧边栏 */

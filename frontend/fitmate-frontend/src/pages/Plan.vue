@@ -646,7 +646,11 @@ async function loadPlanList() {
     if (res.code === 200 && res.data) {
       plans.value = res.data.map(p => ({
         ...p,
-        tasks: p.tasks || []
+        tasks: p.tasks || [],
+        // 确保进度相关字段存在（使用后端返回的数据）
+        progress: p.progress ?? 0,
+        totalTasks: p.totalTasks ?? 0,
+        completedTasks: p.completedTasks ?? 0
       }))
     }
   } catch (error) {
@@ -717,18 +721,17 @@ const getPlanCalories = (plan) => {
   return plan.tasks.reduce((sum, t) => sum + t.calories, 0)
 }
 
+// 直接使用后端返回的进度数据
 const getPlanProgress = (plan) => {
-  const total = plan.tasks.length
-  const completed = plan.tasks.filter(t => t.completed).length
-  return total > 0 ? Math.round((completed / total) * 100) : 0
+  return plan.progress ?? 0
 }
 
 const getPlanCompleted = (plan) => {
-  return plan.tasks.filter(t => t.completed).length
+  return plan.completedTasks ?? 0
 }
 
 const getPlanTotal = (plan) => {
-  return plan.tasks.length
+  return plan.totalTasks ?? 0
 }
 
 const toggleDay = (day) => {
