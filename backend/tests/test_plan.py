@@ -7,8 +7,8 @@ class TestPlanOverview:
         resp = client.get("/api/plans/overview", headers=auth_headers)
         assert resp.status_code == 200
         data = resp.get_json()["data"]
-        assert "totalPlans" in data
-        assert "todayTasks" in data
+        assert "planCount" in data
+        assert "totalTasks" in data
 
 
 class TestPlanList:
@@ -20,7 +20,7 @@ class TestPlanList:
     def test_create_plan(self, client, auth_headers):
         resp = client.post("/api/plans",
                             headers=auth_headers,
-                            json={"planName": "减脂计划", "description": "每周3次"})
+                            json={"name": "减脂计划", "description": "每周3次"})
         assert resp.status_code == 200
         assert "planId" in resp.get_json()["data"]
 
@@ -31,11 +31,11 @@ class TestPlanList:
 
 class TestPlanDetail:
     def test_get_detail(self, client, auth_headers):
-        create = client.post("/api/plans", headers=auth_headers, json={"planName": "详情测试"})
+        create = client.post("/api/plans", headers=auth_headers, json={"name": "详情测试"})
         plan_id = create.get_json()["data"]["planId"]
         resp = client.get(f"/api/plans/{plan_id}", headers=auth_headers)
         assert resp.status_code == 200
-        assert resp.get_json()["data"]["planName"] == "详情测试"
+        assert resp.get_json()["data"]["name"] == "详情测试"
 
     def test_get_detail_not_found(self, client, auth_headers):
         resp = client.get("/api/plans/9999", headers=auth_headers)
@@ -55,7 +55,7 @@ class TestPlanAiGenerate:
 
 class TestPlanDelete:
     def test_delete_plan(self, client, auth_headers):
-        create = client.post("/api/plans", headers=auth_headers, json={"planName": "待删除"})
+        create = client.post("/api/plans", headers=auth_headers, json={"name": "待删除"})
         plan_id = create.get_json()["data"]["planId"]
         resp = client.delete(f"/api/plans/{plan_id}", headers=auth_headers)
         assert resp.status_code == 200

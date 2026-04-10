@@ -5,7 +5,7 @@ from utils.extensions import db
 class Achievement(db.Model):
     __tablename__ = "achievements"
     id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(128), nullable=False)
+    achievement_name = db.Column(db.String(128), nullable=False)
     description = db.Column(db.Text, default="")
     icon = db.Column(db.String(255), default="")
     badge_type = db.Column(db.String(32), default="bronze")

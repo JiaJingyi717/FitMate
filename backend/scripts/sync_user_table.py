@@ -22,14 +22,18 @@ def _sqlite_add_column(name: str, ddl: str) -> str:
 
 # 与 User 模型字段一致（id/username/password 假定已存在）
 _COLUMNS = [
-    ("nickname", "VARCHAR(64) NOT NULL DEFAULT ''", "TEXT NOT NULL DEFAULT ''"),
-    ("avatar", "VARCHAR(255) NOT NULL DEFAULT ''", "TEXT NOT NULL DEFAULT ''"),
-    ("gender", "VARCHAR(16) NOT NULL DEFAULT ''", "TEXT NOT NULL DEFAULT ''"),
+    ("name", "VARCHAR(64) DEFAULT ''", "TEXT NOT NULL DEFAULT ''"),
+    ("avatar", "VARCHAR(255) DEFAULT ''", "TEXT NOT NULL DEFAULT ''"),
+    ("gender", "VARCHAR(16) DEFAULT ''", "TEXT NOT NULL DEFAULT ''"),
     ("height", "FLOAT NULL", "REAL"),
     ("weight", "FLOAT NULL", "REAL"),
     ("age", "INTEGER NULL", "INTEGER"),
-    ("goal", "VARCHAR(128) NOT NULL DEFAULT ''", "TEXT NOT NULL DEFAULT ''"),
+    ("location", "VARCHAR(128) DEFAULT ''", "TEXT NOT NULL DEFAULT ''"),
+    ("goal", "VARCHAR(128) DEFAULT ''", "TEXT NOT NULL DEFAULT ''"),
     ("current_coach_id", "INTEGER NULL", "INTEGER"),
+    ("coach_gender", "VARCHAR(16) NULL", "TEXT"),
+    ("coach_personality", "VARCHAR(32) NULL", "TEXT"),
+    ("join_date", "DATETIME NULL", "DATETIME"),
     ("created_at", "DATETIME NULL", "DATETIME"),
 ]
 
