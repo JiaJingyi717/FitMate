@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 from flask_jwt_extended import create_access_token
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -9,7 +9,14 @@ from utils.extensions import db
 
 def register_user(username: str, password: str, email: str = None, phone: str = None, name: str = None):
     hashed = generate_password_hash(password)
-    user = User(username=username, password=hashed, email=email, phone=phone, name=name or "")
+    user = User(
+        username=username,
+        password=hashed,
+        email=email,
+        phone=phone,
+        name=name or "",
+        join_date=datetime.now()
+    )
     db.session.add(user)
     db.session.commit()
     return user

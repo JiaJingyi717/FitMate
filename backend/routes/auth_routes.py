@@ -13,27 +13,30 @@ auth_bp = Blueprint("auth", __name__)
 @auth_bp.post("/users/register")
 def register():
     payload = request.get_json(silent=True) or {}
+    name = (payload.get("name") or "").strip()
     email = (payload.get("email") or "").strip() or None
     phone = (payload.get("phone") or "").strip() or None
     password = payload.get("password") or ""
-    name = (payload.get("name") or "").strip() or None
 
+    if not name:
+        return fail("name is required")
     if not password:
         return fail("password is required")
 
-    username = email.split("@")[0] if email else (phone if phone else None)
-    if not username:
-        return fail("email or phone is required")
+    # 使用name作为username，同时保存email和phone
+    if db.session.query(User).filter_by(username=name).first():
+        return fail("username already exists")
 
-    username = f"{username}_{abs(hash(password + str(username))) % 100000}"
+    user = register_user(
+        username=name,
+        password=password,
+        email=email,
+        phone=phone,
+        name=name
+    )
 
-    if email and db.session.query(User).filter_by(email=email).first():
-        return fail("email already exists")
-    if phone and db.session.query(User).filter_by(phone=phone).first():
-        return fail("phone already exists")
-
-    user = register_user(username=username, password=password, email=email, phone=phone, name=name)
-    return ok({"userId": user.id}, "register success")
+    token = create_login_token(user.id)
+    return ok({"userId": user.id, "token": token}, "register success")
 
 
 @auth_bp.post("/auth/login")

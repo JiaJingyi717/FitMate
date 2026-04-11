@@ -1,9 +1,23 @@
 from datetime import date, timedelta
 
+from models.user import User
 from models.article import Article
 from models.coach import Coach
 from models.achievement import Achievement
+from services.user_service import register_user
 from utils.extensions import db
+
+
+def seed_test_user():
+    if User.query.count() > 0:
+        return
+    register_user(
+        username="test",
+        password="123456",
+        email="test@example.com",
+        phone="13800138000",
+        name="李明"
+    )
 
 
 def seed_articles():
@@ -135,6 +149,7 @@ def seed_achievements():
 
 
 def seed_all():
+    seed_test_user()
     seed_articles()
     seed_coaches()
     seed_achievements()
