@@ -3,7 +3,7 @@ import request from './request'
 import { mockGetAnalyticsOverview, mockGetCategoryDistribution, mockGetDurationTrend, mockGetAiSuggestions } from '../mocks/analytics.js'
 
 // 开关（非常重要）
-const USE_MOCK = true
+const USE_MOCK = false
 
 // 总览
 export function getAnalyticsOverview(params) {
