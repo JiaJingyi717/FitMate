@@ -12,7 +12,7 @@ import {
 } from '../mocks/article.js'
 
 // 开关（非常重要）
-const USE_MOCK = true
+const USE_MOCK = false
 
 // 获取文章/视频列表
 export function getArticleList(params) {

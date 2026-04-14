@@ -1,0 +1,2481 @@
+#此文件不得修改
+openapi: 3.0.3
+info:
+  title: FitMate API
+  description: |
+    FitMate 健身助手后端 RESTful API
+    基础地址：http://127.0.0.1:5000
+    所有接口返回格式统一：`{ code, message, data }`
+  version: 3.0.0
+  contact:
+    name: FitMate Team
+
+servers:
+  - url: http://127.0.0.1:5000
+    description: 本地开发环境
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: 认证
+    description: 用户注册、登录、忘记密码、退出
+  - name: 个人中心
+    description: 用户资料、成就、密码管理、账号注销
+  - name: AI教练
+    description: 教练列表、个性风格、会话管理、对话
+  - name: 训练计划
+    description: 计划 CRUD、今日任务、打卡、AI 生成
+  - name: 知识库
+    description: 文章/视频列表、详情、点赞收藏评论
+  - name: 数据分析
+    description: 训练数据总览、分布、趋势、AI 建议
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+paths:
+
+  # ==================== 认证模块 ====================
+  /api/users/register:
+    post:
+      tags: [认证]
+      summary: 用户注册
+      security: []
+      description: |
+        支持两种注册方式：
+        - 邮箱注册（必填 email + password，可选 name/phone）
+        - 手机号注册（必填 phone + password，可选 name/email）
+        两种方式二选一。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            example:
+              email: "user@example.com"
+              password: "Test123456"
+              name: "李明"
+              phone: "13800138000"
+      responses:
+        '200':
+          description: 注册成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+        '400':
+          description: 参数不完整 / 用户名/邮箱/手机号已存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/auth/login:
+    post:
+      tags: [认证]
+      summary: 用户登录
+      security: []
+      description: |
+        支持三种登录方式：
+        - 邮箱登录（email + password）
+        - 手机号登录（phone + password）
+        - 用户名登录（username + password）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: "user@example.com"
+              password: "Test123456"
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: 用户名/邮箱/手机号或密码错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/auth/forgot-password:
+    post:
+      tags: [认证]
+      summary: 忘记密码 - 发送验证码
+      security: []
+      description: 向注册邮箱或手机号发送验证码（模拟实现）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+      responses:
+        '200':
+          description: 验证码发送成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                code: 200
+                message: "verification code sent"
+                data: {}
+
+  /api/auth/reset-password:
+    post:
+      tags: [认证]
+      summary: 忘记密码 - 重置密码
+      security: []
+      description: 使用验证码重置密码（模拟实现，验证码写死为 123456）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        '200':
+          description: 重置成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: 验证码错误 / 已过期
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/auth/logout:
+    post:
+      tags: [认证]
+      summary: 退出登录
+      responses:
+        '200':
+          description: 退出成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ==================== 个人中心模块 ====================
+  /api/users/profile:
+    get:
+      tags: [个人中心]
+      summary: 获取当前用户完整资料
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfileResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 用户不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags: [个人中心]
+      summary: 更新用户资料（支持部分更新）
+      description: 所有字段均为可选，仅更新提供的字段。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 用户不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/users/profile/avatar:
+    put:
+      tags: [个人中心]
+      summary: 上传/更新头像
+      description: 接收头像图片 URL 或 Base64 数据
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAvatarRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateAvatarResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/users/stats:
+    get:
+      tags: [个人中心]
+      summary: 获取用户训练统计数据
+      description: 返回累计训练天数、总时长、消耗卡路里、完成计划数
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserStatsResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/users/achievements:
+    get:
+      tags: [个人中心]
+      summary: 获取用户成就徽章列表（已获得 / 未获得）
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AchievementsResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/users/password/change:
+    post:
+      tags: [个人中心]
+      summary: 修改密码（已登录用户）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          description: 修改成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: 旧密码错误 / 参数不完整
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/users/account:
+    delete:
+      tags: [个人中心]
+      summary: 注销账号
+      description: 永久删除账号及其所有关联数据，不可恢复
+      responses:
+        '200':
+          description: 注销成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 用户不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ==================== AI 教练模块 ====================
+  /api/coaches:
+    get:
+      tags: [AI教练]
+      summary: 获取 AI 教练配置列表
+      security: []
+      description: 返回所有可选教练（无需登录即可浏览）
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoachesListResponse'
+
+  /api/coaches/session/init:
+    get:
+      tags: [AI教练]
+      summary: 初始化 AI 教练页面
+      description: 获取当前教练信息、初始欢迎语及历史会话消息
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoachSessionInitResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/coaches/current:
+    put:
+      tags: [AI教练]
+      summary: 切换当前教练（教练性别 + 性格风格）
+      description: |
+        同时设置 coachGender（male/female）和 coachPersonality（gentle/strict/energetic）。
+        前端切换教练时调用此接口，后端更新用户当前教练配置。
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SwitchCoachRequest'
+            example:
+              coachGender: "female"
+              coachPersonality: "gentle"
+      responses:
+        '200':
+          description: 切换成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SwitchCoachResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 教练不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/coaches/chat:
+    post:
+      tags: [AI教练]
+      summary: 发送消息并获取 AI 回复
+      description: |
+        接收用户消息，返回 AI 教练的回复。
+        回复内容根据用户当前设置的 coachPersonality 调整语气风格。
+        若消息中包含"训练计划"/"数据分析"/"健身知识"等关键词，
+        回复中会附带导航卡片引导用户跳转对应页面。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CoachChatRequest'
+            example:
+              message: "我想减脂，应该怎么训练？"
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoachChatResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/coaches/session:
+    delete:
+      tags: [AI教练]
+      summary: 重置当前会话
+      description: 清空聊天历史，返回新的初始欢迎语
+      responses:
+        '200':
+          description: 重置成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoachSessionResetResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ==================== 训练计划模块 ====================
+  /api/plans/overview:
+    get:
+      tags: [训练计划]
+      summary: 获取训练计划页顶部统计概览
+      description: 返回今日统计和计划概览（已用在前端 WorkoutPlanPage 顶部四卡片）
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanOverviewResponse'
+
+  /api/plans:
+    get:
+      tags: [训练计划]
+      summary: 获取训练计划列表
+      description: 返回用户所有训练计划（进行中 + 已结束）
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanListResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [训练计划]
+      summary: 手动创建训练计划
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePlanRequest'
+      responses:
+        '200':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanIdResponse'
+        '400':
+          description: 参数不完整
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/plans/{planId}:
+    get:
+      tags: [训练计划]
+      summary: 获取训练计划详情（含每周每日排程）
+      parameters:
+        - in: path
+          name: planId
+          required: true
+          schema:
+            type: integer
+          description: 训练计划 ID
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanDetailResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 计划不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [训练计划]
+      summary: 删除训练计划
+      parameters:
+        - in: path
+          name: planId
+          required: true
+          schema:
+            type: integer
+          description: 训练计划 ID
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 计划不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/plans/ai-generate:
+    post:
+      tags: [训练计划]
+      summary: AI 生成训练计划（多步向导）
+      description: |
+        支持两步：
+        - Step 1（可选）：提交参数，获取 AI 生成的预览计划
+        - Step 2：确认并保存计划到数据库
+
+        AI 根据用户健身目标、体能水平、每周训练日、每次训练时长、
+        开始/结束日期、额外要求等生成个性化计划。
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AiGeneratePlanRequest'
+            example:
+              goal: "减脂"
+              level: "有基础"
+              daysPerWeek: 4
+              timePerDay: 45
+              trainingDays: ["周一", "周三", "周五", "周六"]
+              startDate: "2026-03-15"
+              endDate: "2026-04-15"
+              additionalRequirements: "加强核心训练，避免高冲击动作"
+      responses:
+        '200':
+          description: 生成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiGeneratePlanResponse'
+
+  /api/plans/today:
+    get:
+      tags: [训练计划]
+      summary: 获取今日训练任务列表
+      description: 聚合所有进行中计划的今日待完成任务
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TodayTasksResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/plans/today/{taskId}/complete:
+    patch:
+      tags: [训练计划]
+      summary: 今日任务打卡完成 / 取消完成
+      parameters:
+        - in: path
+          name: taskId
+          required: true
+          schema:
+            type: integer
+          description: 任务 ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteTaskRequest'
+            example:
+              isCompleted: true
+      responses:
+        '200':
+          description: 打卡成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompleteTaskResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 任务不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/plans/{planId}/tasks:
+    post:
+      tags: [训练计划]
+      summary: 向指定计划添加训练任务
+      description: 从预设训练库选择动作添加到计划，或自定义新动作
+      parameters:
+        - in: path
+          name: planId
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddTaskRequest'
+      responses:
+        '200':
+          description: 添加成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddTaskResponse'
+        '404':
+          description: 计划不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [训练计划]
+      summary: 从计划中移除训练任务
+      parameters:
+        - in: path
+          name: planId
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RemoveTaskRequest'
+      responses:
+        '200':
+          description: 移除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  # ==================== 知识库模块 ====================
+  /api/articles:
+    get:
+      tags: [知识库]
+      summary: 获取知识库内容列表（文章/视频）
+      security: []
+      description: |
+        支持分类筛选（category）、关键词搜索（keyword）、内容类型筛选（type）。
+        可通过 Tab 切换"全部 / 视频教程 / 文章资讯"三种视图。
+      parameters:
+        - in: query
+          name: category
+          schema:
+            type: string
+          description: 分类名称（如"力量训练"、"有氧运动"、"营养饮食"、"拉伸放松"、"运动损伤"）
+          example: "力量训练"
+        - in: query
+          name: keyword
+          schema:
+            type: string
+          description: 搜索关键词（匹配标题和描述）
+          example: "深蹲"
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [video, article]
+          description: 内容类型
+          example: "video"
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArticleListResponse'
+
+  /api/articles/{id}:
+    get:
+      tags: [知识库]
+      summary: 获取文章/视频详情
+      security: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: 文章/视频 ID
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArticleDetailResponse'
+        '404':
+          description: 文章不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/articles/{id}/like:
+    post:
+      tags: [知识库]
+      summary: 点赞文章（Toggle）
+      description: 再次调用取消点赞
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: 文章 ID
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArticleLikeResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 文章不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/articles/{id}/collect:
+    post:
+      tags: [知识库]
+      summary: 收藏文章（Toggle）
+      description: 再次调用取消收藏
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: 文章 ID
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArticleCollectResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 文章不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/articles/{id}/comments:
+    get:
+      tags: [知识库]
+      summary: 获取文章评论列表
+      security: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: 文章 ID
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: 页码
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            default: 20
+          description: 每页数量
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommentsListResponse'
+    post:
+      tags: [知识库]
+      summary: 发表评论
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: 文章 ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddCommentRequest'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddCommentResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 文章不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/articles/collections:
+    get:
+      tags: [知识库]
+      summary: 获取我的收藏列表
+      description: 返回当前用户收藏的所有文章/视频（同 ArticleListResponse 格式）
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArticleListResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/articles/categories:
+    get:
+      tags: [知识库]
+      summary: 获取知识库全部分类
+      security: []
+      description: 返回"力量训练"、"有氧运动"、"营养饮食"、"拉伸放松"、"运动损伤"等分类
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArticleCategoriesResponse'
+
+  # ==================== 数据分析模块 ====================
+  /api/analytics/overview:
+    get:
+      tags: [数据分析]
+      summary: 获取数据总览
+      description: 返回总训练时长、总消耗卡路里、训练次数、平均时长
+      parameters:
+        - in: query
+          name: range
+          schema:
+            type: string
+            enum: [7d, 30d]
+          default: 7d
+          description: 时间范围
+          example: "7d"
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsOverviewResponse'
+
+  /api/analytics/category-distribution:
+    get:
+      tags: [数据分析]
+      summary: 获取运动类型分布
+      description: 返回各运动类型的时长占比（饼图数据）
+      parameters:
+        - in: query
+          name: range
+          schema:
+            type: string
+            enum: [7d, 30d]
+          default: 7d
+          description: 时间范围
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryDistributionResponse'
+
+  /api/analytics/duration-trend:
+    get:
+      tags: [数据分析]
+      summary: 获取训练时长趋势
+      description: 按日/周返回训练时长折线图数据
+      parameters:
+        - in: query
+          name: range
+          schema:
+            type: string
+            enum: [7d, 30d]
+          default: 7d
+          description: 时间范围
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DurationTrendResponse'
+
+  /api/analytics/ai-suggestions:
+    get:
+      tags: [数据分析]
+      summary: 获取 AI 训练建议
+      description: 基于用户近期训练数据，生成 3 条个性化训练建议
+      parameters:
+        - in: query
+          name: range
+          schema:
+            type: string
+            enum: [7d, 30d]
+          default: 7d
+          description: 时间范围
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiSuggestionsResponse'
+
+# ---------------------------------------------------------------------------
+# Schemas
+# ---------------------------------------------------------------------------
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+
+    # ==================== 通用 ====================
+    BaseResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: success
+        data: {}
+
+    SuccessResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              example: {}
+
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 400
+        message:
+          type: string
+          example: error
+        data:
+          type: object
+          example: {}
+
+    # ==================== 认证 ====================
+    RegisterRequest:
+      type: object
+      description: |
+        邮箱注册（email + password）或手机号注册（phone + password），二选一。
+        若同时填写，以 email 为准。
+      properties:
+        email:
+          type: string
+          format: email
+          description: 邮箱（注册方式一）
+          example: "user@example.com"
+        phone:
+          type: string
+          description: 手机号（注册方式二）
+          example: "13800138000"
+        password:
+          type: string
+          format: password
+          minLength: 6
+          description: 密码（至少6位）
+          example: "Test123456"
+        name:
+          type: string
+          description: 姓名（可选）
+          example: "李明"
+      required: [password]
+
+    RegisterResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                userId:
+                  type: integer
+                  example: 1
+
+    LoginRequest:
+      type: object
+      description: |
+        支持三种登录凭证，任选其一：
+        - 邮箱 + 密码（email + password）
+        - 手机号 + 密码（phone + password）
+        - 用户名 + 密码（username + password）
+      properties:
+        email:
+          type: string
+          format: email
+          description: 邮箱
+          example: "user@example.com"
+        phone:
+          type: string
+          description: 手机号
+          example: "13800138000"
+        username:
+          type: string
+          description: 用户名
+          example: "liming"
+        password:
+          type: string
+          format: password
+          description: 密码
+          example: "Test123456"
+      required: [password]
+
+    LoginResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                token:
+                  type: string
+                  description: JWT Bearer Token（有效期1天）
+                  example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                userId:
+                  type: integer
+                  example: 1
+
+    ForgotPasswordRequest:
+      type: object
+      description: 发送密码重置验证码
+      properties:
+        email:
+          type: string
+          format: email
+          description: 注册邮箱
+          example: "user@example.com"
+        phone:
+          type: string
+          description: 注册手机号
+          example: "13800138000"
+
+    ResetPasswordRequest:
+      type: object
+      description: 使用验证码重置密码（模拟实现，验证码写死为 123456）
+      properties:
+        email:
+          type: string
+          format: email
+          description: 注册邮箱
+          example: "user@example.com"
+        phone:
+          type: string
+          description: 注册手机号
+          example: "13800138000"
+        code:
+          type: string
+          description: 验证码
+          example: "123456"
+        newPassword:
+          type: string
+          format: password
+          description: 新密码（至少6位）
+          example: "NewPass789"
+
+    # ==================== 个人中心 ====================
+    UserProfileResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  example: 1
+                username:
+                  type: string
+                  description: 用户名（登录凭证，不可修改）
+                  example: "liming"
+                email:
+                  type: string
+                  nullable: true
+                  example: "liming@example.com"
+                phone:
+                  type: string
+                  nullable: true
+                  example: "138****8888"
+                name:
+                  type: string
+                  description: 姓名/昵称
+                  example: "李明"
+                avatar:
+                  type: string
+                  nullable: true
+                  description: 头像 URL
+                  example: "https://example.com/avatar.jpg"
+                gender:
+                  type: string
+                  nullable: true
+                  enum: [male, female, other]
+                  description: 性别
+                  example: "male"
+                age:
+                  type: integer
+                  nullable: true
+                  example: 28
+                height:
+                  type: number
+                  nullable: true
+                  description: 身高（cm）
+                  example: 175.0
+                weight:
+                  type: number
+                  nullable: true
+                  description: 体重（kg）
+                  example: 70.0
+                bmi:
+                  type: number
+                  nullable: true
+                  description: BMI 指数（前端根据身高体重计算）
+                  example: 22.9
+                location:
+                  type: string
+                  nullable: true
+                  description: 所在地
+                  example: "北京市朝阳区"
+                joinDate:
+                  type: string
+                  description: 加入日期
+                  example: "2024年1月"
+                goal:
+                  type: string
+                  nullable: true
+                  description: 健身目标
+                  example: "减脂"
+                currentCoachId:
+                  type: integer
+                  nullable: true
+                  example: 1
+
+    UpdateProfileRequest:
+      type: object
+      description: 所有字段均为可选，支持部分更新
+      properties:
+        name:
+          type: string
+          example: "李明"
+        gender:
+          type: string
+          enum: [male, female, other]
+          example: "male"
+        age:
+          type: integer
+          example: 28
+        height:
+          type: number
+          description: 身高（cm）
+          example: 178.0
+        weight:
+          type: number
+          description: 体重（kg）
+          example: 72.0
+        location:
+          type: string
+          example: "北京市朝阳区"
+        goal:
+          type: string
+          example: "增肌"
+        currentCoachId:
+          type: integer
+          nullable: true
+          example: 2
+
+    UpdateAvatarRequest:
+      type: object
+      properties:
+        avatar:
+          type: string
+          description: 头像 URL 或 Base64 数据
+          example: "https://example.com/avatar.jpg"
+
+    UpdateAvatarResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                avatar:
+                  type: string
+                  example: "https://example.com/avatar.jpg"
+
+    UserStatsResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                totalDays:
+                  type: integer
+                  description: 累计训练天数
+                  example: 89
+                totalDuration:
+                  type: integer
+                  description: 总训练时长（分钟）
+                  example: 9360
+                totalCalories:
+                  type: integer
+                  description: 累计消耗卡路里
+                  example: 23456
+                completedPlans:
+                  type: integer
+                  description: 已完成计划数
+                  example: 12
+
+    AchievementItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          description: 成就名称
+          example: "坚持之星"
+        description:
+          type: string
+          description: 成就描述
+          example: "连续训练7天"
+        icon:
+          type: string
+          description: 成就图标（emoji 或图片URL）
+          example: "⭐"
+        badgeType:
+          type: string
+          enum: [bronze, silver, gold]
+          example: bronze
+        isEarned:
+          type: boolean
+          description: 是否已获得
+          example: true
+
+    AchievementsResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/AchievementItem'
+
+    ChangePasswordRequest:
+      type: object
+      required: [oldPassword, newPassword]
+      properties:
+        oldPassword:
+          type: string
+          format: password
+          description: 当前密码
+          example: "Test123456"
+        newPassword:
+          type: string
+          format: password
+          description: 新密码（至少6位）
+          example: "NewPass789"
+
+    # ==================== AI 教练 ====================
+    CoachInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: "小雅教练"
+        gender:
+          type: string
+          enum: [male, female]
+          example: female
+        style:
+          type: string
+          deprecated: true
+          description: 已废弃，请使用 personality
+          example: "gentle"
+        personality:
+          type: string
+          description: 性格风格（gentle=温柔 / strict=严格 / energetic=活力）
+          example: "gentle"
+        avatar:
+          type: string
+          nullable: true
+          example: ""
+        introduction:
+          type: string
+          description: 教练简介
+          example: "温柔鼓励型教练，擅长减脂指导与心理陪伴"
+
+    CoachesListResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/CoachInfo'
+
+    ChatMessage:
+      type: object
+      description: 单条聊天消息
+      properties:
+        id:
+          type: integer
+          example: 1
+        sender:
+          type: string
+          enum: [user, coach]
+          example: user
+        text:
+          type: string
+          example: "我想减脂，应该怎么训练？"
+        time:
+          type: string
+          description: 发送时间（格式 HH:mm）
+          example: "10:00"
+        recommendation:
+          type: object
+          nullable: true
+          description: 导航推荐卡片（仅 coach 回复可能携带）
+          properties:
+            title:
+              type: string
+              example: "训练计划"
+            description:
+              type: string
+              example: "点击查看和创建你的个性化训练计划"
+            icon:
+              type: string
+              example: "📅"
+            link:
+              type: string
+              example: "/workout"
+
+    CoachSessionInitResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                sessionId:
+                  type: integer
+                  example: 1
+                coach:
+                  $ref: '#/components/schemas/CoachInfo'
+                messages:
+                  type: array
+                  description: 历史消息列表（首次为空数组）
+                  items:
+                    $ref: '#/components/schemas/ChatMessage'
+
+    SwitchCoachRequest:
+      type: object
+      properties:
+        coachId:
+          type: integer
+          nullable: true
+          description: 教练 ID（null = 使用系统默认）
+          example: 2
+        coachGender:
+          type: string
+          nullable: true
+          enum: [male, female]
+          description: 教练性别（用于数字人形象切换）
+          example: "female"
+        coachPersonality:
+          type: string
+          nullable: true
+          enum: [gentle, strict, energetic]
+          description: 教练性格风格
+          example: "gentle"
+
+    SwitchCoachResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                coachId:
+                  type: integer
+                  nullable: true
+                  example: 2
+                coachGender:
+                  type: string
+                  nullable: true
+                  example: "female"
+                coachPersonality:
+                  type: string
+                  nullable: true
+                  example: "gentle"
+
+    CoachChatRequest:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          description: 用户发送的消息
+          example: "我想减脂，应该怎么训练？"
+
+    CoachChatResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                reply:
+                  type: string
+                  description: AI 教练回复内容
+                  example: "当然可以！我可以帮你制定训练计划..."
+                recommendation:
+                  type: object
+                  nullable: true
+                  description: 导航推荐卡片（可选）
+                  properties:
+                    title:
+                      type: string
+                    description:
+                      type: string
+                    icon:
+                      type: string
+                    link:
+                      type: string
+
+    CoachSessionResetResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                sessionId:
+                  type: integer
+                  description: 新会话 ID
+                  example: 2
+                messages:
+                  type: array
+                  description: 新的初始消息（含 AI 欢迎语）
+                  items:
+                    $ref: '#/components/schemas/ChatMessage'
+
+    # ==================== 训练计划 ====================
+    PlanOverviewResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                completedTasks:
+                  type: integer
+                  description: 今日已完成任务数
+                  example: 2
+                totalTasks:
+                  type: integer
+                  description: 今日总任务数
+                  example: 4
+                totalDuration:
+                  type: integer
+                  description: 今日累计训练时长（分钟）
+                  example: 45
+                totalCalories:
+                  type: integer
+                  description: 今日累计消耗卡路里
+                  example: 320
+                planCount:
+                  type: integer
+                  description: 训练计划总数
+                  example: 5
+
+    WorkoutTaskItem:
+      type: object
+      description: 训练任务项
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          description: 任务名称
+          example: "热身跑步"
+        type:
+          type: string
+          description: 动作类型/部位（有氧、HIIT、胸部、背部、肩部、手臂、腿部、核心、拉伸、恢复、热身）
+          example: "有氧"
+        duration:
+          type: string
+          description: 训练时长（字符串，如"10分钟"）
+          example: "10分钟"
+        durationMinutes:
+          type: integer
+          description: 训练时长（分钟数）
+          example: 10
+        calories:
+          type: integer
+          description: 预计消耗卡路里
+          example: 80
+        sets:
+          type: integer
+          nullable: true
+          description: 组数（HIIT/力量动作）
+          example: 5
+        reps:
+          type: integer
+          nullable: true
+          description: 次数（每组）
+          example: 10
+        rest:
+          type: string
+          nullable: true
+          description: 组间休息时间
+          example: "30秒"
+        isCompleted:
+          type: boolean
+          description: 是否已完成
+          example: false
+        planId:
+          type: integer
+          description: 所属计划 ID
+          example: 1
+
+    DailySchedule:
+      type: object
+      description: 每日训练安排
+      properties:
+        date:
+          type: string
+          description: 日期（格式 M.d 或完整日期）
+          example: "3.10"
+        dayOfWeek:
+          type: string
+          description: 星期几
+          example: "周一"
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkoutTaskItem'
+
+    WeeklySchedule:
+      type: object
+      description: 每周训练安排
+      properties:
+        weekNumber:
+          type: integer
+          example: 1
+        days:
+          type: array
+          items:
+            $ref: '#/components/schemas/DailySchedule'
+
+    PlanListItem:
+      type: object
+      description: 训练计划列表项
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: "燃脂减肥计划"
+        description:
+          type: string
+          example: "针对减脂目标的综合训练计划"
+        type:
+          type: string
+          enum: [AI生成, 手动创建]
+          example: "AI生成"
+        difficulty:
+          type: string
+          enum: [初级, 中级, 高级]
+          example: "中级"
+        duration:
+          type: string
+          description: 计划周期（如"4周"）
+          example: "4周"
+        startDate:
+          type: string
+          format: date
+          nullable: true
+          example: "2026-03-10"
+        endDate:
+          type: string
+          format: date
+          nullable: true
+          example: "2026-04-10"
+        status:
+          type: string
+          description: 状态（todo=进行中 / done=已完成 / expired=已过期）
+          example: "todo"
+        totalTasks:
+          type: integer
+          description: 计划总任务数
+          example: 20
+        completedTasks:
+          type: integer
+          description: 已完成任务数
+          example: 8
+        progress:
+          type: integer
+          description: 完成进度百分比（0-100）
+          example: 40
+        totalCalories:
+          type: integer
+          description: 累计消耗卡路里
+          example: 1800
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-03-10T10:00:00"
+
+    PlanListResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/PlanListItem'
+
+    PlanDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  example: 1
+                name:
+                  type: string
+                  example: "燃脂减肥计划"
+                description:
+                  type: string
+                  example: "针对减脂目标的综合训练计划"
+                type:
+                  type: string
+                  enum: [AI生成, 手动创建]
+                  example: "AI生成"
+                difficulty:
+                  type: string
+                  enum: [初级, 中级, 高级]
+                  example: "中级"
+                duration:
+                  type: string
+                  example: "4周"
+                startDate:
+                  type: string
+                  format: date
+                  nullable: true
+                  example: "2026-03-10"
+                endDate:
+                  type: string
+                  format: date
+                  nullable: true
+                  example: "2026-04-10"
+                status:
+                  type: string
+                  example: "todo"
+                progress:
+                  type: integer
+                  example: 40
+                totalTasks:
+                  type: integer
+                  example: 20
+                completedTasks:
+                  type: integer
+                  example: 8
+                totalCalories:
+                  type: integer
+                  example: 1800
+                tasks:
+                  type: array
+                  description: 简要任务列表（用于"今日任务"视图）
+                  items:
+                    $ref: '#/components/schemas/WorkoutTaskItem'
+                weeklySchedule:
+                  type: array
+                  description: 每周详细排程
+                  items:
+                    $ref: '#/components/schemas/WeeklySchedule'
+                createdAt:
+                  type: string
+                  format: date-time
+                  example: "2026-03-10T10:00:00"
+
+    CreatePlanRequest:
+      type: object
+      required: [name, startDate, endDate]
+      properties:
+        name:
+          type: string
+          description: 计划名称
+          example: "减脂计划"
+        description:
+          type: string
+          example: "每周3次有氧+2次力量"
+        difficulty:
+          type: string
+          enum: [初级, 中级, 高级]
+          default: 中级
+          example: "中级"
+        duration:
+          type: string
+          description: 计划周期（如"4周"，可选）
+          example: "4周"
+        startDate:
+          type: string
+          format: date
+          description: 开始日期
+          example: "2026-03-10"
+        endDate:
+          type: string
+          format: date
+          description: 结束日期
+          example: "2026-04-10"
+        trainingDays:
+          type: array
+          items:
+            type: string
+          description: 每周训练日（如["周一","周三","周五"]）
+          example: ["周一", "周三", "周五", "周六"]
+        tasks:
+          type: array
+          description: 初始任务列表（可选，可后续单独添加）
+          items:
+            $ref: '#/components/schemas/WorkoutTaskItem'
+
+    PlanIdResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                planId:
+                  type: integer
+                  example: 1
+
+    AiGeneratePlanRequest:
+      type: object
+      properties:
+        goal:
+          type: string
+          description: 健身目标
+          default: "综合体能提升"
+          example: "减脂"
+        level:
+          type: string
+          description: 体能水平
+          enum: [初学者, 有基础, 健身达人]
+          example: "有基础"
+        daysPerWeek:
+          type: integer
+          description: 每周训练天数
+          example: 4
+        timePerDay:
+          type: integer
+          description: 每次训练时长（分钟）
+          example: 45
+        trainingDays:
+          type: array
+          items:
+            type: string
+          description: 具体训练日
+          example: ["周一", "周三", "周五", "周六"]
+        startDate:
+          type: string
+          format: date
+          description: 计划开始日期
+          example: "2026-03-15"
+        endDate:
+          type: string
+          format: date
+          description: 计划结束日期
+          example: "2026-04-15"
+        additionalRequirements:
+          type: string
+          description: 额外要求（如"加强核心训练、避免高冲击动作"）
+          example: "加强核心训练"
+        save:
+          type: boolean
+          default: false
+          description: 是否直接保存（true = 生成并保存到数据库；false = 仅预览）
+
+    AiGeneratePlanResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                planId:
+                  type: integer
+                  nullable: true
+                  description: 已保存时返回 planId，预览时为 null
+                  example: 2
+                name:
+                  type: string
+                  example: "AI智能减脂计划"
+                description:
+                  type: string
+                  example: "基于你的目标定制的科学减脂方案"
+                difficulty:
+                  type: string
+                  enum: [初级, 中级, 高级]
+                  example: "中级"
+                duration:
+                  type: string
+                  example: "4周"
+                tasks:
+                  type: array
+                  description: AI 生成的任务列表
+                  items:
+                    $ref: '#/components/schemas/WorkoutTaskItem'
+                weeklySchedule:
+                  type: array
+                  nullable: true
+                  description: 每周详细排程（可选）
+                  items:
+                    $ref: '#/components/schemas/WeeklySchedule'
+
+    TodayTasksResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/WorkoutTaskItem'
+
+    CompleteTaskRequest:
+      type: object
+      properties:
+        isCompleted:
+          type: boolean
+          default: true
+          description: true=打卡完成，false=取消完成
+          example: true
+
+    CompleteTaskResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                recordId:
+                  type: integer
+                  nullable: true
+                  description: 打卡记录 ID（取消时为 null）
+                  example: 1
+                taskId:
+                  type: integer
+                  example: 1
+
+    AddTaskRequest:
+      type: object
+      required: [task]
+      properties:
+        task:
+          $ref: '#/components/schemas/WorkoutTaskItem'
+
+    AddTaskResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                taskId:
+                  type: integer
+                  example: 10
+
+    RemoveTaskRequest:
+      type: object
+      required: [taskId]
+      properties:
+        taskId:
+          type: integer
+          example: 10
+
+    # ==================== 知识库 ====================
+    ArticleListItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        title:
+          type: string
+          example: "如何正确进行深蹲训练"
+        category:
+          type: string
+          example: "力量训练"
+        type:
+          type: string
+          enum: [video, article]
+          description: 内容类型
+          example: "video"
+        description:
+          type: string
+          description: 简短描述
+          example: "深蹲是力量训练的基础动作..."
+        thumbnail:
+          type: string
+          nullable: true
+          description: 封面图 URL 或 emoji
+          example: "🏋️"
+        videoUrl:
+          type: string
+          nullable: true
+          description: 视频地址（仅视频类型）
+          example: ""
+        duration:
+          type: string
+          nullable: true
+          description: 视频时长（如"12:30"）
+          example: "12:30"
+        views:
+          type: integer
+          description: 浏览量
+          example: 15234
+        likes:
+          type: integer
+          description: 点赞数
+          example: 892
+        commentCount:
+          type: integer
+          description: 评论数
+          example: 3
+        author:
+          type: string
+          example: "官方"
+        publishDate:
+          type: string
+          format: date
+          description: 发布时间
+          example: "2026-03-10"
+        isLiked:
+          type: boolean
+          description: 当前用户是否已点赞（需登录）
+          example: false
+        isCollected:
+          type: boolean
+          description: 当前用户是否已收藏（需登录）
+          example: false
+
+    ArticleListResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ArticleListItem'
+
+    ArticleDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  example: 1
+                title:
+                  type: string
+                  example: "HIIT高强度间歇训练完整指南"
+                category:
+                  type: string
+                  example: "有氧运动"
+                type:
+                  type: string
+                  enum: [video, article]
+                  example: "article"
+                description:
+                  type: string
+                  example: "了解HIIT训练的原理、好处..."
+                thumbnail:
+                  type: string
+                  nullable: true
+                  example: "🔥"
+                content:
+                  type: string
+                  description: 文章正文（Markdown 格式，仅 article 类型）
+                  example: "# HIIT训练指南..."
+                videoUrl:
+                  type: string
+                  nullable: true
+                  description: 视频地址（仅 video 类型）
+                  example: ""
+                duration:
+                  type: string
+                  nullable: true
+                  example: "12:30"
+                views:
+                  type: integer
+                  example: 8932
+                likes:
+                  type: integer
+                  example: 634
+                commentCount:
+                  type: integer
+                  example: 3
+                author:
+                  type: string
+                  example: "官方"
+                publishDate:
+                  type: string
+                  format: date
+                  example: "2026-03-08"
+                tags:
+                  type: array
+                  items:
+                    type: string
+                  example: ["HIIT", "有氧运动", "高强度训练", "减脂"]
+                isLiked:
+                  type: boolean
+                  example: false
+                isCollected:
+                  type: boolean
+                  example: false
+                relatedArticles:
+                  type: array
+                  description: 相关推荐文章
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 4
+                      title:
+                        type: string
+                        example: "10分钟全身拉伸教程"
+                      thumbnail:
+                        type: string
+                        example: "🧘"
+                      category:
+                        type: string
+                        example: "拉伸放松"
+
+    ArticleLikeResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                likeCount:
+                  type: integer
+                  description: 最新点赞数
+                  example: 13
+                isLiked:
+                  type: boolean
+                  description: 当前点赞状态（toggle 结果）
+                  example: true
+
+    ArticleCollectResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                collectCount:
+                  type: integer
+                  description: 最新收藏数
+                  example: 6
+                isCollected:
+                  type: boolean
+                  description: 当前收藏状态（toggle 结果）
+                  example: true
+
+    CommentItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        userId:
+          type: integer
+          example: 1
+        username:
+          type: string
+          example: "健身爱好者"
+        avatar:
+          type: string
+          nullable: true
+          example: ""
+        content:
+          type: string
+          example: "讲解非常详细，对我帮助很大！"
+        likes:
+          type: integer
+          description: 评论点赞数
+          example: 23
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-03-10T14:30:00"
+        date:
+          type: string
+          description: 相对时间描述
+          example: "2天前"
+
+    CommentsListResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                comments:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/CommentItem'
+                total:
+                  type: integer
+                  description: 总评论数
+                  example: 15
+                page:
+                  type: integer
+                  example: 1
+                pageSize:
+                  type: integer
+                  example: 20
+
+    AddCommentRequest:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          description: 评论内容
+          example: "写得很好，学到了很多！"
+
+    AddCommentResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                commentId:
+                  type: integer
+                  example: 1
+
+    ArticleCategoriesResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                type: object
+                properties:
+                  name:
+                    type: string
+                    example: "力量训练"
+                  count:
+                    type: integer
+                    description: 该分类下的内容数量
+                    example: 5
+
+    # ==================== 数据分析 ====================
+    SportDistributionItem:
+      type: object
+      properties:
+        name:
+          type: string
+          example: "力量训练"
+        value:
+          type: integer
+          description: 时长（分钟）
+          example: 120
+
+    AnalyticsOverviewResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                totalDuration:
+                  type: integer
+                  description: 总训练时长（分钟）
+                  example: 355
+                totalCalories:
+                  type: integer
+                  description: 总消耗卡路里
+                  example: 2540
+                trainingCount:
+                  type: integer
+                  description: 训练次数
+                  example: 7
+                avgDuration:
+                  type: integer
+                  description: 平均每次训练时长（分钟）
+                  example: 50
+                sportDistribution:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/SportDistributionItem'
+
+    CategoryDistributionItem:
+      type: object
+      properties:
+        name:
+          type: string
+          example: "力量训练"
+        value:
+          type: integer
+          example: 120
+        percentage:
+          type: number
+          description: 占比（%）
+          example: 35.0
+
+    CategoryDistributionResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                distribution:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/CategoryDistributionItem'
+                total:
+                  type: integer
+                  description: 总时长（分钟）
+                  example: 355
+
+    DurationTrendItem:
+      type: object
+      properties:
+        date:
+          type: string
+          description: 日期（格式 M/d）
+          example: "3/6"
+        duration:
+          type: integer
+          description: 训练时长（分钟）
+          example: 45
+        calories:
+          type: integer
+          description: 消耗卡路里
+          example: 320
+
+    DurationTrendResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                trend:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/DurationTrendItem'
+
+    AiSuggestionsResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                suggestions:
+                  type: array
+                  description: AI 训练建议列表
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                      type:
+                        type: string
+                        enum: [positive, warning, tip]
+                        description: 建议类型（positive=正面 / warning=提醒 / tip=技巧）
+                        example: "warning"
+                      title:
+                        type: string
+                        example: "建议增加力量训练"
+                      description:
+                        type: string
+                        example: "根据数据分析，你的有氧训练占比较高..."

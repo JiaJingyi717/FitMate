@@ -41,16 +41,16 @@
         <div v-show="activeTab === 'login'" class="auth-form">
           <form @submit.prevent="handleLogin">
             <div class="form-group">
-              <label class="form-label">邮箱</label>
+              <label class="form-label">邮箱 / 手机号</label>
               <div class="input-wrapper">
                 <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="2" y="4" width="20" height="16" rx="2"/>
-                  <path d="M22 6l-10 7L2 6"/>
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
                 </svg>
                 <input
-                  v-model="loginForm.email"
-                  type="email"
-                  placeholder="请输入邮箱"
+                  v-model="loginForm.identifier"
+                  type="text"
+                  placeholder="请输入邮箱或手机号"
                   class="form-input"
                   required
                 />
@@ -215,7 +215,7 @@ const agreeTerms = ref(false)
 const errorMessage = ref('')
 
 const loginForm = ref({
-  email: '',
+  identifier: '',
   password: ''
 })
 
@@ -242,8 +242,8 @@ function showError(msg) {
 
 async function handleLogin() {
   // 基础验证
-  if (!loginForm.value.email || !loginForm.value.password) {
-    showError('请输入邮箱和密码')
+  if (!loginForm.value.identifier || !loginForm.value.password) {
+    showError('请输入账号和密码')
     return
   }
 
@@ -251,10 +251,14 @@ async function handleLogin() {
   clearError()
 
   try {
-    const res = await login({
-      email: loginForm.value.email,
-      password: loginForm.value.password
-    })
+    // 判断是邮箱还是手机号
+    const identifier = loginForm.value.identifier
+    const isEmail = identifier.includes('@')
+    const loginData = isEmail
+      ? { email: identifier, password: loginForm.value.password }
+      : { phone: identifier, password: loginForm.value.password }
+
+    const res = await login(loginData)
 
     // 检查响应
     if (res.code === 200 && res.data) {
@@ -322,19 +326,22 @@ async function handleRegister() {
       password: registerForm.value.password
     })
 
-    if (res.code === 200) {
-      // 注册成功，切换到登录页面并填充邮箱
-      activeTab.value = 'login'
-      loginForm.value.email = registerForm.value.email
-      // 清空注册表单
-      registerForm.value = {
-        name: '',
-        email: '',
-        phone: '',
-        password: '',
-        confirmPassword: ''
+    if (res.code === 200 && res.data) {
+      // 注册成功，自动登录
+      const token = res.data.token
+      if (token) {
+        // 保存 token 到 localStorage
+        localStorage.setItem('token', token)
+        localStorage.setItem('tokenExpiry', String(Date.now() + 7 * 24 * 60 * 60 * 1000))
       }
-      showError('注册成功，请登录')
+
+      // 保存用户ID
+      if (res.data.userId) {
+        localStorage.setItem('userId', res.data.userId)
+      }
+
+      // 跳转到首页
+      router.push('/home')
     } else {
       showError(res.message || '注册失败')
     }
