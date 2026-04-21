@@ -199,7 +199,7 @@
 <script setup>
 import { ref, nextTick, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { initCoachSession, switchCoach, sendCoachMessage, resetCoachSession } from '../api/coach'
+import { askCoach } from '../api/ai'
 
 const router = useRouter()
 
@@ -212,16 +212,8 @@ const isSpeaking = ref(false)
 const isLoading = ref(false)
 const messagesContainer = ref(null)
 const errorMessage = ref('')
-const recognitionText = ref('')
 const isVoiceSupported = ref(true)
 let recognition = null
-const currentCoach = ref({
-  id: 1,
-  name: '小雅教练',
-  gender: 'female',
-  personality: 'gentle',
-  introduction: '温柔鼓励型教练，擅长减脂指导与心理陪伴'
-})
 
 // 个性化设置选项
 const personalities = [
@@ -300,84 +292,22 @@ function getTimeStr() {
   return `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
 }
 
-// 初始化会话 - 加载欢迎语和历史消息
-async function loadCoachSession() {
-  isLoading.value = true
-  try {
-    const res = await initCoachSession()
-    if (res.code === 200 && res.data) {
-      const { coach, messages: historyMessages } = res.data
+// 初始化会话 - 加载欢迎语
+function initWelcome() {
+  const coachNames = { male: '小帅教练', female: '小雅教练' }
+  const personalityNames = { gentle: '温柔鼓励型', strict: '严格激励型', energetic: '活力四射型' }
 
-      // 设置当前教练信息
-      if (coach) {
-        currentCoach.value = coach
-        gender.value = coach.gender === 'male' ? 'male' : 'female'
-        personality.value = coach.personality || 'gentle'
-      }
-
-      // 设置历史消息或欢迎语
-      if (historyMessages && historyMessages.length > 0) {
-        messages.value = historyMessages
-      } else if (res.data.welcomeMessage) {
-        messages.value = [{
-          id: 1,
-          sender: 'coach',
-          text: res.data.welcomeMessage,
-          time: getTimeStr()
-        }]
-      }
-    }
-  } catch (error) {
-    console.error('初始化会话失败:', error)
-    // 降级：使用默认欢迎语
-    messages.value = [{
-      id: 1,
-      sender: 'coach',
-      text: '你好！我是你的AI健身教练，很高兴认识你。让我们一起开始健康之旅吧！有什么我可以帮助你的吗？',
-      time: getTimeStr()
-    }]
-  } finally {
-    isLoading.value = false
-    scrollToBottom()
-  }
+  messages.value = [{
+    id: 1,
+    sender: 'coach',
+    text: `你好！我是你的AI健身教练${coachNames[gender.value]}（${personalityNames[personality.value]}）。很高兴认识你！\n\n我可以帮你：\n• 制定个性化训练计划\n• 解答健身动作要领\n• 提供饮食建议\n\n有什么我可以帮助你的吗？`,
+    time: getTimeStr()
+  }]
 }
 
-// 切换教练设置 - 调用API保存设置
-async function handleSwitchCoach() {
-  try {
-    const res = await switchCoach({
-      coachGender: gender.value,
-      coachPersonality: personality.value
-    })
-    if (res.code === 200) {
-      // 添加系统提示消息
-      const coachNames = {
-        male: '小帅教练',
-        female: '小雅教练'
-      }
-      const personalityNames = {
-        gentle: '温柔鼓励型',
-        strict: '严格激励型',
-        energetic: '活力四射型'
-      }
-
-      messages.value.push({
-        id: Date.now(),
-        sender: 'system',
-        text: `已切换到${coachNames[gender.value]}（${personalityNames[personality.value]}）`,
-        time: getTimeStr()
-      })
-      scrollToBottom()
-    }
-  } catch (error) {
-    console.error('切换教练失败:', error)
-    showError('切换教练失败，请重试')
-  }
-}
-
-// 监听教练设置变化，自动切换
+// 监听教练设置变化，重新初始化欢迎语
 watch([gender, personality], () => {
-  handleSwitchCoach()
+  initWelcome()
 })
 
 // 发送消息
@@ -401,14 +331,28 @@ async function handleSendMessage() {
   isLoading.value = true
   isSpeaking.value = true
 
+  // 构建消息历史
+  const history = messages.value
+    .filter(m => m.sender !== 'system')
+    .map(m => ({
+      role: m.sender === 'user' ? 'user' : 'assistant',
+      content: m.text
+    }))
+
+  // 添加上下文信息
+  const context = {
+    coach_gender: gender.value,
+    coach_personality: personality.value
+  }
+
   try {
-    const res = await sendCoachMessage({ message: text })
+    const res = await askCoach(history, context)
 
     if (res.code === 200 && res.data) {
-      const { reply, recommendation } = res.data
+      const reply = res.data.content || res.data.reply || '抱歉，我现在无法回复你。'
 
       // 如果API没有返回推荐卡片，则根据用户消息意图检测
-      const intentRecommendation = recommendation || detectIntent(text)
+      const intentRecommendation = detectIntent(text)
 
       // 添加AI回复
       const aiMsg = {
@@ -444,22 +388,20 @@ async function handleSendMessage() {
 
 // 初始化语音识别
 function initSpeechRecognition() {
-  // 检查浏览器支持
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
 
   if (!SpeechRecognition) {
     isVoiceSupported.value = false
-    console.warn('当前浏览器不支持语音识别，建议使用 Chrome 浏览器')
+    console.warn('当前浏览器不支持语音识别')
     return null
   }
 
   const recognizer = new SpeechRecognition()
-  recognizer.lang = 'zh-CN'           // 设置为中文
-  recognizer.continuous = false        // 单次识别
-  recognizer.interimResults = true     // 返回临时结果
-  recognizer.maxAlternatives = 1       // 返回最佳结果
+  recognizer.lang = 'zh-CN'
+  recognizer.continuous = false
+  recognizer.interimResults = true
+  recognizer.maxAlternatives = 1
 
-  // 识别结果返回
   recognizer.onresult = (event) => {
     let finalTranscript = ''
     let interimTranscript = ''
@@ -473,18 +415,15 @@ function initSpeechRecognition() {
       }
     }
 
-    // 使用最终结果
     if (finalTranscript) {
       inputMessage.value = finalTranscript
     }
   }
 
-  // 识别结束
   recognizer.onend = () => {
     isRecording.value = false
   }
 
-  // 识别错误处理
   recognizer.onerror = (event) => {
     console.error('语音识别错误:', event.error)
     isRecording.value = false
@@ -509,22 +448,18 @@ function initSpeechRecognition() {
 
 // 语音输入
 async function handleVoiceInput() {
-  // 检查浏览器支持
   if (!isVoiceSupported.value) {
     showError('当前浏览器不支持语音识别，请使用 Chrome 浏览器')
     return
   }
 
-  // 如果正在录音，停止
   if (isRecording.value && recognition) {
     recognition.stop()
     isRecording.value = false
     return
   }
 
-  // 开始录音
   try {
-    // 初始化识别器（延迟初始化，确保 DOM 已挂载）
     if (!recognition) {
       recognition = initSpeechRecognition()
     }
@@ -555,29 +490,17 @@ const handleRecommendation = (link) => {
 }
 
 // 重置会话
-async function handleResetSession() {
+function handleResetSession() {
   if (confirm('确定要清空聊天记录并开始新对话吗？')) {
-    isLoading.value = true
-    try {
-      const res = await resetCoachSession()
-      if (res.code === 200) {
-        messages.value = []
-        // 重新加载欢迎语
-        await loadCoachSession()
-      }
-    } catch (error) {
-      console.error('重置会话失败:', error)
-      showError('重置会话失败，请重试')
-    } finally {
-      isLoading.value = false
-    }
+    messages.value = []
+    initWelcome()
+    scrollToBottom()
   }
 }
 
 // 页面加载时初始化
 onMounted(() => {
-  loadCoachSession()
-  // 检查语音识别支持
+  initWelcome()
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
   isVoiceSupported.value = !!SpeechRecognition
 })
@@ -860,6 +783,10 @@ onMounted(() => {
   animation: spin 0.8s linear infinite;
 }
 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .error-message {
   padding: 12px 16px;
   background: #fef2f2;
@@ -923,6 +850,7 @@ onMounted(() => {
 .message-text {
   margin: 0;
   line-height: 1.6;
+  white-space: pre-wrap;
 }
 
 .message-time {

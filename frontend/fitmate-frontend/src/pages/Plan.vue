@@ -543,10 +543,10 @@ import {
   getPlanDetail,
   createPlan,
   deletePlan as apiDeletePlan,
-  generateAiPlan,
   getTodayTasks,
   completeTodayTask
 } from '../api/plan'
+import { generatePlan } from '../api/ai'
 
 const activeTab = ref('all')
 const showAIDialog = ref(false)
@@ -559,6 +559,21 @@ const errorMessage = ref('')
 // 显示错误提示
 function showError(msg) {
   errorMessage.value = msg
+  setTimeout(() => {
+    errorMessage.value = ''
+  }, 3000)
+}
+
+// 显示成功提示
+function showSuccess(msg) {
+  errorMessage.value = msg
+  // 临时改为绿色（通过修改 class）
+  const toast = document.querySelector('.error-toast')
+  if (toast) {
+    toast.style.background = '#f0fdf4'
+    toast.style.borderColor = '#bbf7d0'
+    toast.style.color = '#16a34a'
+  }
   setTimeout(() => {
     errorMessage.value = ''
   }, 3000)
@@ -624,6 +639,7 @@ const todayTasks = ref([])
 async function loadOverview() {
   try {
     const res = await getPlanOverview()
+    console.log('📈 getPlanOverview 响应:', res)
     if (res.code === 200 && res.data) {
       overviewStats.value = {
         completedTasks: res.data.completedTasks || 0,
@@ -632,29 +648,61 @@ async function loadOverview() {
         totalCalories: res.data.totalCalories || 0,
         planCount: res.data.planCount || 0
       }
+      console.log('✅ overviewStats 已更新:', overviewStats.value)
+    } else {
+      console.warn('⚠️ 概览响应格式异常:', res)
     }
   } catch (error) {
-    console.error('加载概览失败:', error)
+    console.error('❌ 加载概览失败:', error)
   }
 }
 
 // 加载计划列表
 async function loadPlanList() {
+  console.log('🔄 正在加载计划列表...')
   isLoading.value = true
   try {
     const res = await getPlanList()
-    if (res.code === 200 && res.data) {
-      plans.value = res.data.map(p => ({
-        ...p,
-        tasks: p.tasks || [],
-        // 确保进度相关字段存在（使用后端返回的数据）
-        progress: p.progress ?? 0,
-        totalTasks: p.totalTasks ?? 0,
-        completedTasks: p.completedTasks ?? 0
-      }))
+    console.log('📋 getPlanList 响应:', res)
+    if (res && res.code === 200 && res.data) {
+      console.log('📊 原始数据:', res.data)
+      // 安全地处理数据，确保不会因为字段类型错误而崩溃
+      if (Array.isArray(res.data)) {
+        plans.value = res.data.map(p => {
+          try {
+            return {
+              id: p.id || p.planId,
+              name: p.name || '未命名计划',
+              description: p.description || '',
+              type: p.type || '手动创建',
+              duration: p.duration || '',
+              difficulty: p.difficulty || '中级',
+              startDate: p.startDate || p.start_date || '',
+              endDate: p.endDate || p.end_date || '',
+              tasks: Array.isArray(p.tasks) ? p.tasks : [],
+              progress: Number(p.progress) || 0,
+              totalTasks: Number(p.totalTasks) || 0,
+              completedTasks: Number(p.completedTasks) || 0,
+              weeklySchedule: Array.isArray(p.weeklySchedule) ? p.weeklySchedule : [],
+              totalCalories: Number(p.totalCalories) || 0
+            }
+          } catch (mapError) {
+            console.error('❌ 单个计划映射失败:', p, mapError)
+            return null
+          }
+        }).filter(p => p !== null)
+        console.log('✅ plans 已更新，长度:', plans.value.length)
+      } else {
+        console.warn('⚠️ res.data 不是数组:', typeof res.data)
+        plans.value = []
+      }
+    } else {
+      console.warn('⚠️ 响应格式异常:', res)
     }
   } catch (error) {
-    console.error('加载计划列表失败:', error)
+    console.error('❌ 加载计划列表失败:', error)
+    console.error('❌ error.message:', error.message)
+    console.error('❌ error.stack:', error.stack)
     showError('加载计划失败，请刷新重试')
   } finally {
     isLoading.value = false
@@ -670,6 +718,8 @@ async function loadTodayTasks() {
         ...t,
         completed: t.isCompleted || false
       }))
+      // 更新今日任务总数
+      overviewStats.value.totalTasks = todayTasks.value.length
     }
   } catch (error) {
     console.error('加载今日任务失败:', error)
@@ -787,19 +837,102 @@ const toggleTaskComplete = async (task) => {
 }
 
 const deletePlan = async (planId) => {
-  if (!confirm('确定要删除这个计划吗？')) return
+  // 防抖锁：防止重复点击
+  if (deletePlan.executing && deletePlan.executing.has(planId)) {
+    console.log('⚠️ 删除操作正在进行中，请勿重复点击')
+    return
+  }
+
+  // 创建锁
+  if (!deletePlan.executing) {
+    deletePlan.executing = new Set()
+  }
+  deletePlan.executing.add(planId)
+
+  console.log('🔴 [删除开始] planId:', planId)
+
+  if (!confirm('确定要删除这个计划吗？')) {
+    deletePlan.executing.delete(planId)
+    return
+  }
+
+  // 找到要删除的计划（用于回滚）
+  const planToRemove = plans.value.find(p => p.id === planId)
+  console.log('🔴 找到要删除的计划:', planToRemove)
+  if (!planToRemove) return
+
+  // 乐观更新：先更新 UI，给用户即时反馈
+  plans.value = plans.value.filter(p => p.id !== planId)
+  overviewStats.value.planCount--
+  console.log('🔴 UI 已更新，当前 plans 数量:', plans.value.length)
+
+  // 本地 AI 计划（ID 以 ai- 开头）不需要调用后端 API
+  if (planId.toString().startsWith('ai-')) {
+    console.log('🔴 本地 AI 计划，直接完成删除')
+    deletePlan.executing.delete(planId)
+    // 只刷新今日任务（不需要刷新计划列表，因为 AI 计划不在后端）
+    try {
+      await loadTodayTasks()
+      console.log('🔴 今日任务已刷新')
+    } catch (e) {
+      console.error('⚠️ 刷新今日任务失败:', e)
+    }
+    return
+  }
 
   try {
-    await apiDeletePlan(planId)
-    plans.value = plans.value.filter(p => p.id !== planId)
-    overviewStats.value.planCount--
+    console.log('🔴 调用 apiDeletePlan...')
+    const res = await apiDeletePlan(planId)
+    console.log('🔴 API 响应:', res)
+    console.log('🔴 响应类型:', typeof res)
+    console.log('🔴 res.code:', res?.code)
+
+    // 如果后端返回明确的业务错误码
+    if (res && res.code && res.code !== 200) {
+      console.error('🔴 业务错误，code:', res.code, 'message:', res.message)
+      throw new Error(res.message || '删除失败')
+    }
+
+    // 删除成功，尝试刷新数据（即使刷新失败也不影响删除结果）
+    console.log('🔴 删除成功，开始刷新数据...')
+    try {
+      const results = await Promise.all([loadPlanList(), loadOverview(), loadTodayTasks()])
+      console.log('🔴 刷新完成，results:', results)
+    } catch (refreshError) {
+      console.error('⚠️ 刷新数据失败（但删除可能已成功）:', refreshError)
+      console.error('⚠️ refreshError.stack:', refreshError.stack)
+      // 不抛出异常，不回滚 UI
+    } finally {
+      // 释放锁
+      deletePlan.executing.delete(planId)
+    }
   } catch (error) {
-    console.error('删除计划失败:', error)
-    showError('删除计划失败，请重试')
+    console.error('❌ 删除计划捕获到异常:', error)
+    console.error('❌ error.name:', error.name)
+    console.error('❌ error.message:', error.message)
+    console.error('❌ error.response:', error.response)
+
+    // 回滚 UI
+    plans.value.unshift(planToRemove)
+    overviewStats.value.planCount++
+    console.log('❌ UI 已回滚')
+    showError('删除计划失败，请刷新页面确认')
+  } finally {
+    // 确保锁被释放（无论成功还是失败）
+    if (deletePlan.executing && deletePlan.executing.has(planId)) {
+      deletePlan.executing.delete(planId)
+    }
   }
 }
 
 const openPlanDetail = async (plan) => {
+  // 本地 AI 计划（ID 以 ai- 开头）已经有完整数据，直接使用
+  if (plan.id.toString().startsWith('ai-')) {
+    selectedPlan.value = plan
+    showPlanDetail.value = true
+    return
+  }
+
   isLoading.value = true
   try {
     const res = await getPlanDetail(plan.id)
@@ -824,44 +957,71 @@ const generateAIPlan = async () => {
   isLoading.value = true
 
   try {
-    const res = await generateAiPlan({
+    // 调用新的 AI API
+    const res = await generatePlan({
       goal: aiForm.value.goal,
       level: aiForm.value.level,
       daysPerWeek: aiForm.value.trainingDays.length,
-      timePerDay: 45,
-      trainingDays: aiForm.value.trainingDays,
-      startDate: aiForm.value.startDate,
-      endDate: aiForm.value.endDate,
-      additionalRequirements: aiForm.value.additionalRequirements,
-      save: true
+      duration: 4,
+      preferences: '均衡',
+      restrictions: aiForm.value.additionalRequirements,
+      notes: ''
     })
 
     if (res.code === 200 && res.data) {
       const difficultyMap = { '初学者': '初级', '有基础': '中级', '健身达人': '高级' }
 
-      const newPlanId = res.data.planId || generateId()
+      // 从 AI 返回的训练计划中提取任务
+      let tasks = []
+      let weeklySchedule = []
+
+      if (res.data.plan && res.data.plan.weekly_schedule) {
+        // 解析 AI 返回的训练计划格式
+        const aiPlan = res.data.plan
+        weeklySchedule = aiPlan.weekly_schedule.map((week, idx) => ({
+          weekNumber: idx + 1,
+          weekLabel: `第${idx + 1}周`,
+          days: week.map(day => ({
+            dayOfWeek: day.day,
+            tasks: (day.exercises || []).map((ex, exIdx) => ({
+              id: `ai-${Date.now()}-${exIdx}`,
+              name: ex.name,
+              type: ex.type,
+              duration: ex.duration,
+              durationMinutes: ex.duration,
+              calories: ex.calories || 0,
+              sets: ex.sets,
+              reps: ex.reps,
+              isCompleted: false
+            })),
+            totalDuration: day.total_duration_minutes || 0,
+            totalCalories: day.estimated_calories || 0
+          }))
+        }))
+
+        tasks = weeklySchedule.flatMap(w => w.days.flatMap(d => d.tasks))
+      }
 
       const newPlan = {
-        id: newPlanId,
-        name: res.data.name || `AI智能${aiForm.value.goal}计划`,
-        description: res.data.description || `基于${aiForm.value.goal}目标的训练计划`,
+        id: `ai-${Date.now()}`,
+        name: res.data.plan?.plan_name || `AI智能${aiForm.value.goal}计划`,
+        description: res.data.plan?.description || `基于${aiForm.value.goal}目标的AI训练计划`,
         type: 'AI生成',
-        duration: res.data.duration || `${aiForm.value.trainingDays.length * 4}周`,
-        difficulty: res.data.difficulty || difficultyMap[aiForm.value.level] || '中级',
-        startDate: aiForm.value.startDate || res.data.startDate,
-        endDate: aiForm.value.endDate || res.data.endDate,
-        tasks: res.data.tasks || [],
-        weeklySchedule: res.data.weeklySchedule || [],
-        totalTasks: res.data.totalTasks || 0,
-        totalCalories: res.data.totalCalories || 0
+        duration: res.data.plan?.duration_weeks ? `${res.data.plan.duration_weeks}周` : `${aiForm.value.trainingDays.length * 4}周`,
+        difficulty: res.data.plan?.difficulty || difficultyMap[aiForm.value.level] || '中级',
+        startDate: aiForm.value.startDate,
+        endDate: aiForm.value.endDate,
+        tasks: tasks,
+        weeklySchedule: weeklySchedule,
+        totalTasks: tasks.length,
+        totalCalories: tasks.reduce((sum, t) => sum + (t.calories || 0), 0)
       }
 
       plans.value.unshift(newPlan)
       overviewStats.value.planCount++
 
-      // 自动打开计划详情
-      selectedPlan.value = newPlan
-      showPlanDetail.value = true
+      // 关闭弹窗
+      showAIDialog.value = false
 
       // 重置表单
       aiForm.value = {
@@ -873,7 +1033,7 @@ const generateAIPlan = async () => {
         additionalRequirements: ''
       }
 
-      showAIDialog.value = false
+      showSuccess('AI计划生成成功！')
     } else {
       throw new Error(res.message || '生成失败')
     }
@@ -928,9 +1088,8 @@ const saveManualPlan = async () => {
       plans.value.unshift(newPlan)
       overviewStats.value.planCount++
 
-      // 自动打开计划详情
-      selectedPlan.value = newPlan
-      showPlanDetail.value = true
+      // 关闭弹窗（不打开详情页，直接回到列表）
+      showManualDialog.value = false
 
       // 重置表单
       manualForm.value = {
@@ -943,7 +1102,11 @@ const saveManualPlan = async () => {
       }
       manualTasks.value = []
 
-      showManualDialog.value = false
+      // 自动刷新计划列表和概览
+      await Promise.all([loadPlanList(), loadOverview()])
+
+      // 显示成功提示
+      showSuccess('计划创建成功！')
     } else {
       throw new Error(res.message || '创建失败')
     }
@@ -975,7 +1138,7 @@ const saveManualPlan = async () => {
   color: #dc2626;
   font-size: 14px;
   text-align: center;
-  z-index: 1000;
+  z-index: 900;
   animation: slideDown 0.3s ease;
   box-shadow: 0 4px 12px rgba(220, 38, 38, 0.15);
 }
@@ -1380,7 +1543,7 @@ const saveManualPlan = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 2000;
   padding: 20px;
 }
 
