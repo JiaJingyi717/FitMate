@@ -74,13 +74,19 @@ def ai_generate():
 @plan_bp.delete("/plans/<int:plan_id>")
 @jwt_required()
 def remove_plan(plan_id: int):
-    user_id = int(get_jwt_identity())
-    plan = TrainingPlan.query.filter_by(id=plan_id, user_id=user_id).first()
-    if not plan:
-        return fail("plan not found", 404)
+    try:
+        user_id = int(get_jwt_identity())
+        plan = TrainingPlan.query.filter_by(id=plan_id, user_id=user_id).first()
+        if not plan:
+            return fail("plan not found", 404)
 
-    delete_plan(plan)
-    return ok(msg="plan deleted")
+        delete_plan(plan)
+        return ok(message="plan deleted")
+    except Exception as e:
+        print(f"[remove_plan] 异常: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+        return fail(f"删除失败: {str(e)}", 500)
 
 
 @plan_bp.get("/plans/today")

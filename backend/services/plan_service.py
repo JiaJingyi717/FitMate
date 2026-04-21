@@ -224,9 +224,27 @@ def update_training_plan(plan, payload: dict):
 
 
 def delete_plan(plan):
-    db.session.query(PlanTask).filter_by(plan_id=plan.id).delete()
-    db.session.delete(plan)
-    db.session.commit()
+    try:
+        # 先删除关联的训练记录
+        deleted_records = TrainingRecord.query.filter_by(plan_id=plan.id).delete()
+        print(f"[delete_plan] 删除了 {deleted_records} 条训练记录")
+
+        # 再删除关联的计划任务
+        deleted_tasks = db.session.query(PlanTask).filter_by(plan_id=plan.id).delete()
+        print(f"[delete_plan] 删除了 {deleted_tasks} 个计划任务")
+
+        # 删除计划本身
+        db.session.delete(plan)
+        print(f"[delete_plan] 标记删除计划 id={plan.id}")
+
+        # 提交事务
+        db.session.commit()
+        print(f"[delete_plan] 事务提交成功，计划 id={plan.id} 已删除")
+    except Exception as e:
+        print(f"[delete_plan] 发生异常: {type(e).__name__}: {e}")
+        db.session.rollback()
+        print(f"[delete_plan] 事务已回滚")
+        raise
 
 
 def ai_generate_plan(user_id: int, payload: dict, save: bool = True):
