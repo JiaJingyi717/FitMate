@@ -50,7 +50,7 @@ def build_category_distribution(user_id: int, range_: str = "7d"):
             "value": value,
             "percentage": round(value / total * 100, 1) if total > 0 else 0,
         })
-    return {"distribution": items, "total": total}
+    return items
 
 
 def build_duration_trend(user_id: int, range_: str = "7d"):
@@ -70,7 +70,7 @@ def build_duration_trend(user_id: int, range_: str = "7d"):
             "duration": total_duration,
             "calories": total_calories,
         })
-    return {"trend": trend}
+    return trend
 
 
 def build_ai_suggestions(user_id: int, range_: str = "7d"):
@@ -86,26 +86,26 @@ def build_ai_suggestions(user_id: int, range_: str = "7d"):
     suggestions = []
     if count == 0:
         suggestions = [
-            {"id": 1, "type": "tip", "title": "开启你的训练之旅", "description": "建议本周开始你的第一次训练，从每天10分钟轻度运动开始。"},
-            {"id": 2, "type": "positive", "title": "制定明确目标", "description": "先确定你的健身目标（减脂、增肌或提升体能），然后让AI教练帮你规划。"},
-            {"id": 3, "type": "warning", "title": "注意运动安全", "description": "新手建议从低强度开始，循序渐进，避免运动损伤。"},
+            "开启你的训练之旅：建议本周开始你的第一次训练，从每天10分钟轻度运动开始。",
+            "制定明确目标：先确定你的健身目标（减脂、增肌或提升体能），然后让AI教练帮你规划。",
+            "注意运动安全：新手建议从低强度开始，循序渐进，避免运动损伤。"
         ]
     elif count < 3:
         suggestions = [
-            {"id": 1, "type": "warning", "title": "训练频率偏低", "description": "本周训练次数偏少，建议每周至少3次才能看到明显效果。"},
-            {"id": 2, "type": "tip", "title": "合理安排训练", "description": "力量训练和有氧训练穿插进行，效率更高。"},
-            {"id": 3, "type": "positive", "title": "保持积极心态", "description": "每次训练都是进步，坚持下去就会看到变化！"},
+            "训练频率偏低：本周训练次数偏少，建议每周至少3次才能看到明显效果。",
+            "合理安排训练：力量训练和有氧训练穿插进行，效率更高。",
+            "保持积极心态：每次训练都是进步，坚持下去就会看到变化！"
         ]
     elif total < 150:
         suggestions = [
-            {"id": 1, "type": "positive", "title": "训练时长充足", "description": "本周训练时长充足，但可以适当增加力量训练比例。"},
-            {"id": 2, "type": "tip", "title": "加强核心训练", "description": "建议每周加入1-2次核心训练，提升整体体能。"},
-            {"id": 3, "type": "warning", "title": "注意恢复休息", "description": "训练后记得拉伸放松，帮助肌肉恢复。"},
+            "训练时长充足：本周训练时长充足，但可以适当增加力量训练比例。",
+            "加强核心训练：建议每周加入1-2次核心训练，提升整体体能。",
+            "注意恢复休息：训练后记得拉伸放松，帮助肌肉恢复。"
         ]
     else:
         suggestions = [
-            {"id": 1, "type": "positive", "title": "训练表现优秀", "description": "本周训练表现优秀，注意休息和恢复，避免过度训练。"},
-            {"id": 2, "type": "tip", "title": "定期更换训练内容", "description": "建议定期更换训练内容，防止身体适应导致效果下降。"},
-            {"id": 3, "type": "positive", "title": "关注饮食配合", "description": "配合科学饮食能让训练效果事半功倍。"},
+            "训练表现优秀：本周训练表现优秀，注意休息和恢复，避免过度训练。",
+            "定期更换训练内容：建议定期更换训练内容，防止身体适应导致效果下降。",
+            "关注饮食配合：配合科学饮食能让训练效果事半功倍。"
         ]
-    return {"suggestions": suggestions}
+    return suggestions

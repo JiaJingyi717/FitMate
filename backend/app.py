@@ -10,6 +10,7 @@ from routes.auth_routes import auth_bp
 from routes.coaches_routes import coaches_bp
 from routes.plan_routes import plan_bp
 from routes.users_routes import users_bp
+from routes.ai_routes import ai_bp
 from utils.extensions import db, jwt
 from utils.response import ok
 
@@ -41,9 +42,12 @@ def create_app():
     app.register_blueprint(articles_bp, url_prefix="/api")
     # 数据分析
     app.register_blueprint(analytics_bp, url_prefix="/api")
+    # AI 智能功能
+    app.register_blueprint(ai_bp, url_prefix="/api/ai")
 
     with app.app_context():
         from sqlalchemy import text
+        from time import sleep
 
         dialect = db.engine.dialect.name
         is_sqlite = dialect == "sqlite"
@@ -53,7 +57,25 @@ def create_app():
             db.create_all()
             seed_all()
         else:
-            # MySQL-specific migration logic: 安全地添加缺失的列，不删除任何数据
+            # MySQL: 添加重试机制，等待数据库就绪
+            max_retries = 30
+            retry_delay = 2
+
+            for attempt in range(max_retries):
+                try:
+                    # 测试连接
+                    db.session.execute(text("SELECT 1"))
+                    print(f"[migration] 数据库连接成功（尝试 {attempt + 1}/{max_retries}）")
+                    break
+                except Exception as e:
+                    print(f"[migration] 数据库连接失败，{retry_delay}秒后重试... ({attempt + 1}/{max_retries}): {e}")
+                    if attempt < max_retries - 1:
+                        sleep(retry_delay)
+                    else:
+                        print("[migration] 错误：无法连接到数据库，跳过迁移")
+                        return app
+
+            # 安全地添加缺失的列
             def safe_add_column_if_missing(table, column, col_type):
                 try:
                     existing = db.session.execute(
@@ -64,9 +86,14 @@ def create_app():
                         return
                     db.session.execute(text(f"ALTER TABLE {table} ADD COLUMN `{column}` {col_type}"))
                     db.session.commit()
+                    print(f"[migration] 添加列: {table}.{column}")
                 except Exception as e:
                     db.session.rollback()
-                    print(f"[migration] WARN: {table}.{column}: {e}")
+                    # 忽略"列已存在"等非致命错误
+                    if "Duplicate column" in str(e) or "already exists" in str(e).lower():
+                        pass
+                    else:
+                        print(f"[migration] WARN: {table}.{column}: {e}")
 
             safe_add_column_if_missing("users", "email", "VARCHAR(128) NULL")
             safe_add_column_if_missing("users", "phone", "VARCHAR(32) NULL")
