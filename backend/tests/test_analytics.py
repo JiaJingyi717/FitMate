@@ -23,18 +23,18 @@ class TestCategoryDistribution:
     def test_category_success(self, client, auth_headers):
         resp = client.get("/api/analytics/category-distribution", headers=auth_headers)
         assert resp.status_code == 200
-        assert "distribution" in resp.get_json()["data"]
+        assert isinstance(resp.get_json()["data"], list)
 
 
 class TestDurationTrend:
     def test_trend_success(self, client, auth_headers):
         resp = client.get("/api/analytics/duration-trend", headers=auth_headers)
         assert resp.status_code == 200
-        assert "trend" in resp.get_json()["data"]
+        assert isinstance(resp.get_json()["data"], list)
 
 
 class TestAiSuggestions:
     def test_suggestions_success(self, client, auth_headers):
         resp = client.get("/api/analytics/ai-suggestions", headers=auth_headers)
         assert resp.status_code == 200
-        assert "suggestions" in resp.get_json()["data"]
+        assert isinstance(resp.get_json()["data"], list)
