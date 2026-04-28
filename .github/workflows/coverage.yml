@@ -65,11 +65,13 @@ jobs:
           ls -la coverage
           ls -la coverage/lcov.info || true
           wc -l coverage/lcov.info || true
+          cp coverage/lcov.info ../../frontend-lcov.info
+          ls -la ../../frontend-lcov.info
 
       - name: Upload frontend coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
-          files: frontend/fitmate-frontend/coverage/lcov.info
+          files: frontend-lcov.info
           flags: frontend
           disable_search: true
           verbose: true
