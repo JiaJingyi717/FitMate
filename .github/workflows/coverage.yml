@@ -32,9 +32,9 @@ jobs:
       - name: Upload backend coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
           files: backend/coverage.xml
           flags: backend
+          disable_search: true
           fail_ci_if_error: false
 
   frontend:
@@ -59,10 +59,15 @@ jobs:
       - name: Run frontend tests with coverage
         run: npm run test:coverage
 
+      - name: Check frontend coverage files
+        run: |
+          pwd
+          ls -la coverage
+
       - name: Upload frontend coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
           files: frontend/fitmate-frontend/coverage/lcov.info
           flags: frontend
+          disable_search: true
           fail_ci_if_error: false
