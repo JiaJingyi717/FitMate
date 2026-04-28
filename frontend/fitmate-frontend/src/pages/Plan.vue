@@ -98,7 +98,7 @@
         <button
           class="tab-btn"
           :class="{ active: activeTab === 'today' }"
-          @click="activeTab = 'today'"
+          @click="switchToTodayTab"
         >
           今日任务
         </button>
@@ -743,22 +743,76 @@ const stats = computed(() => {
   }
 })
 
+function getTodayMeta() {
+  const now = new Date()
+  const todayDate = now.toISOString().split('T')[0]
+  const dayLabels = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+  return {
+    todayDate,
+    todayDayLabel: dayLabels[now.getDay()]
+  }
+}
+
+function buildTodayTasksFromPlans() {
+  const { todayDate, todayDayLabel } = getTodayMeta()
+  const todayPlanTasks = []
+
+  plans.value.forEach((plan) => {
+    // 优先从周计划结构中按日期取今天任务
+    if (Array.isArray(plan.weeklySchedule) && plan.weeklySchedule.length > 0) {
+      plan.weeklySchedule.forEach((week) => {
+        ;(week.days || []).forEach((day) => {
+          if (day.isRestDay) return
+          const isToday = day.date === todayDate || day.dayOfWeek === todayDayLabel
+          if (!isToday) return
+          ;(day.tasks || []).forEach((task) => {
+            todayPlanTasks.push({
+              ...task,
+              planName: plan.name
+            })
+          })
+        })
+      })
+      return
+    }
+
+    // 兜底：仅接受明确标记到今天日期的任务，避免把整周任务都展示出来
+    ;(plan.tasks || []).forEach((task) => {
+      const taskDate = task.target_date || task.targetDate || task.date
+      if (taskDate && String(taskDate).startsWith(todayDate)) {
+        todayPlanTasks.push({
+          ...task,
+          planName: plan.name
+        })
+      }
+    })
+  })
+
+  return todayPlanTasks
+}
+
 // 今日任务计算属性
 const todayTasksComputed = computed(() => {
   if (todayTasks.value.length > 0) {
     return todayTasks.value
   }
-  // 降级：从计划中获取今日任务
-  return plans.value.flatMap(p => p.tasks.map(t => ({ ...t, planName: p.name })))
+  // 降级：从计划中仅提取“今天”的任务
+  return buildTodayTasksFromPlans()
 })
 
 const canGenerateAI = computed(() => {
-  return aiForm.value.goal && aiForm.value.level && aiForm.value.startDate && aiForm.value.endDate
+  // 只需要目标、水平和训练天数，日期可选
+  return aiForm.value.goal && aiForm.value.level && aiForm.value.trainingDays.length > 0
 })
 
 const canSaveManual = computed(() => {
   return manualForm.value.name && manualTasks.value.length > 0 && manualForm.value.startDate && manualForm.value.endDate
 })
+
+const switchToTodayTab = async () => {
+  activeTab.value = 'today'
+  await loadTodayTasks()
+}
 
 const isPlanEnded = (plan) => {
   if (!plan.endDate) return false
@@ -957,16 +1011,30 @@ const generateAIPlan = async () => {
   isLoading.value = true
 
   try {
-    // 调用新的 AI API
-    const res = await generatePlan({
+    // 获取或设置默认日期
+    const today = new Date().toISOString().split('T')[0]
+    const defaultEndDate = new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+
+    // 训练天数直接使用已选择的日期数组
+    const trainingDaysStr = aiForm.value.trainingDays.join('、')
+    
+    const requestData = {
       goal: aiForm.value.goal,
       level: aiForm.value.level,
       daysPerWeek: aiForm.value.trainingDays.length,
       duration: 4,
       preferences: '均衡',
       restrictions: aiForm.value.additionalRequirements,
-      notes: ''
-    })
+      notes: '',
+      save: true,
+      start_date: aiForm.value.startDate || today,
+      end_date: aiForm.value.endDate || defaultEndDate,
+      training_days: trainingDaysStr
+    }
+    console.log('📤 AI 请求数据:', requestData)
+    
+    // 调用 AI API 生成计划
+    const res = await generatePlan(requestData)
 
     if (res.code === 200 && res.data) {
       const difficultyMap = { '初学者': '初级', '有基础': '中级', '健身达人': '高级' }
@@ -974,43 +1042,122 @@ const generateAIPlan = async () => {
       // 从 AI 返回的训练计划中提取任务
       let tasks = []
       let weeklySchedule = []
+      let planId = null
+      let savedPlan = null
+
+      // 检查是否有已保存的计划
+      if (res.data.saved_plan) {
+        savedPlan = res.data.saved_plan
+        planId = savedPlan.plan_id
+      }
 
       if (res.data.plan && res.data.plan.weekly_schedule) {
         // 解析 AI 返回的训练计划格式
+        // AI 返回的是扁平数组 [{day: "周一", ...}, {day: "周三", ...}]
         const aiPlan = res.data.plan
-        weeklySchedule = aiPlan.weekly_schedule.map((week, idx) => ({
-          weekNumber: idx + 1,
-          weekLabel: `第${idx + 1}周`,
-          days: week.map(day => ({
-            dayOfWeek: day.day,
-            tasks: (day.exercises || []).map((ex, exIdx) => ({
-              id: `ai-${Date.now()}-${exIdx}`,
-              name: ex.name,
-              type: ex.type,
-              duration: ex.duration,
-              durationMinutes: ex.duration,
-              calories: ex.calories || 0,
-              sets: ex.sets,
-              reps: ex.reps,
-              isCompleted: false
-            })),
-            totalDuration: day.total_duration_minutes || 0,
-            totalCalories: day.estimated_calories || 0
-          }))
+        const daysData = aiPlan.weekly_schedule
+
+        // 获取用户选择的训练日
+        const selectedDays = aiForm.value.trainingDays || []
+        const allDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+        const trainingDaysSet = new Set(selectedDays)
+
+        // 解析开始日期
+        const startDateStr = savedPlan?.start_date || aiForm.value.startDate
+        const startDate = startDateStr ? new Date(startDateStr) : new Date()
+
+        // 按周分组，每周7天，填充休息日
+        const weeks = []
+        let currentWeek = []
+        let currentDate = new Date(startDate)
+
+        // 如果开始日期不是周日，调整到对应周的周日
+        const dayOfWeek = currentDate.getDay()
+        const daysToSunday = dayOfWeek
+        currentDate.setDate(currentDate.getDate() - daysToSunday)
+
+        for (let i = 0; i < 28; i++) { // 4周 = 28天
+          const date = new Date(currentDate)
+          date.setDate(currentDate.getDate() + i)
+
+          const dayName = allDays[date.getDay()]
+          const dateKey = date.toISOString().split('T')[0]
+
+          // 查找这一天是否有训练任务
+          const dayData = daysData.find(d => {
+            if (d.date === dateKey) return true
+            if (d.day === dayName) return true
+            return false
+          })
+
+          if (trainingDaysSet.has(dayName) && dayData) {
+            // 训练日
+            currentWeek.push({
+              date: dateKey,
+              day: dayName,
+              dayOfWeek: dayName,
+              isRestDay: false,
+              exercises: dayData.exercises || [],
+              tasks: (dayData.exercises || []).map((ex, exIdx) => ({
+                id: `ai-${Date.now()}-${i}-${exIdx}`,
+                name: ex.name,
+                type: ex.type || '综合',
+                duration: ex.duration || 30,
+                durationMinutes: ex.duration || 30,
+                calories: ex.calories || 0,
+                sets: ex.sets,
+                reps: ex.reps,
+                rest: ex.rest,
+                isCompleted: false
+              })),
+              totalDuration: dayData.estimated_calories || 0,
+              totalCalories: dayData.estimated_calories || 0
+            })
+          } else {
+            // 休息日
+            currentWeek.push({
+              date: dateKey,
+              day: dayName,
+              dayOfWeek: dayName,
+              isRestDay: true,
+              exercises: [],
+              tasks: [],
+              totalDuration: 0,
+              totalCalories: 0
+            })
+          }
+
+          if (currentWeek.length === 7) {
+            weeks.push(currentWeek)
+            currentWeek = []
+          }
+        }
+
+        weeklySchedule = weeks.map((weekDays, weekIdx) => ({
+          weekNumber: weekIdx + 1,
+          weekLabel: `第${weekIdx + 1}周`,
+          trainingDays: weekDays.filter(d => !d.isRestDay).length,
+          restDays: weekDays.filter(d => d.isRestDay).length,
+          days: weekDays
         }))
 
         tasks = weeklySchedule.flatMap(w => w.days.flatMap(d => d.tasks))
       }
 
+      // 如果有保存的计划，获取保存的 ID
+      if (!planId && res.data.saved_plan_id) {
+        planId = res.data.saved_plan_id
+      }
+
       const newPlan = {
-        id: `ai-${Date.now()}`,
-        name: res.data.plan?.plan_name || `AI智能${aiForm.value.goal}计划`,
-        description: res.data.plan?.description || `基于${aiForm.value.goal}目标的AI训练计划`,
+        id: planId || `ai-${Date.now()}`,
+        name: res.data.plan?.plan_name || savedPlan?.plan_name || `AI智能${aiForm.value.goal}计划`,
+        description: res.data.plan?.description || savedPlan?.description || `基于${aiForm.value.goal}目标的AI训练计划`,
         type: 'AI生成',
         duration: res.data.plan?.duration_weeks ? `${res.data.plan.duration_weeks}周` : `${aiForm.value.trainingDays.length * 4}周`,
-        difficulty: res.data.plan?.difficulty || difficultyMap[aiForm.value.level] || '中级',
-        startDate: aiForm.value.startDate,
-        endDate: aiForm.value.endDate,
+        difficulty: res.data.plan?.difficulty || savedPlan?.difficulty || difficultyMap[aiForm.value.level] || '中级',
+        startDate: savedPlan?.start_date || aiForm.value.startDate || new Date().toISOString().split('T')[0],
+        endDate: savedPlan?.end_date || aiForm.value.endDate || '',
         tasks: tasks,
         weeklySchedule: weeklySchedule,
         totalTasks: tasks.length,
@@ -1034,6 +1181,9 @@ const generateAIPlan = async () => {
       }
 
       showSuccess('AI计划生成成功！')
+
+      // 生成后立即同步后端“今日任务”，避免页面仍显示空列表
+      await loadTodayTasks()
     } else {
       throw new Error(res.message || '生成失败')
     }
