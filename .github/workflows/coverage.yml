@@ -61,7 +61,8 @@ jobs:
 
       - name: Check frontend coverage files
         run: |
-          ls -la frontend/fitmate-frontend/coverage
+          pwd
+          ls -la coverage
 
       - name: Upload frontend coverage to Codecov
         uses: codecov/codecov-action@v4
