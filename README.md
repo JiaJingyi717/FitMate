@@ -1,5 +1,8 @@
 # FitMate——README
 
+[![Backend Coverage](https://codecov.io/gh/JiaJingyi717/FitMate/branch/main/graph/badge.svg?flag=backend)](https://codecov.io/gh/JiaJingyi717/FitMate)
+[![Frontend Coverage](https://codecov.io/gh/JiaJingyi717/FitMate/branch/main/graph/badge.svg?flag=frontend)](https://codecov.io/gh/JiaJingyi717/FitMate)
+
 figma设计原型链接：
 
 https://www.figma.com/design/WGetgfp2fP6v4eQRaiaXIe/FitMate%E5%8E%9F%E5%9E%8B%E8%AE%BE%E8%AE%A1?node-id=0-1&t=SiKwFAQh3FqpTKip-1
@@ -44,3 +47,13 @@ FitMate — AI 智能健身助手
 **数据库：**
 
 ​	mysql
+
+## 五、测试与覆盖率
+
+- 后端测试目录：`backend/tests/`
+- 前端测试目录：`frontend/fitmate-frontend/src/__tests__/`
+- GitHub Actions 覆盖率工作流：`.github/workflows/coverage.yml`
+- 后端覆盖率报告文件：`backend/coverage.xml`
+- 前端覆盖率报告文件：`frontend/fitmate-frontend/coverage/lcov.info`
+
+> 说明：后端与前端覆盖率徽章均已启用，数据由 GitHub Actions + Codecov 自动更新。
