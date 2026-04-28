@@ -32,7 +32,6 @@ jobs:
       - name: Upload backend coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
           files: backend/coverage.xml
           flags: backend
           fail_ci_if_error: false
@@ -62,7 +61,6 @@ jobs:
       - name: Upload frontend coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
           files: frontend/fitmate-frontend/coverage/lcov.info
           flags: frontend
           fail_ci_if_error: false
