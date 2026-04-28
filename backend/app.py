@@ -95,6 +95,19 @@ def create_app():
                     else:
                         print(f"[migration] WARN: {table}.{column}: {e}")
 
+            # 安全地修改列类型
+            def safe_modify_column_type(table, column, new_type):
+                try:
+                    db.session.execute(text(f"ALTER TABLE {table} MODIFY COLUMN `{column}` {new_type}"))
+                    db.session.commit()
+                    print(f"[migration] 修改列类型: {table}.{column} -> {new_type}")
+                except Exception as e:
+                    db.session.rollback()
+                    if "Duplicate column" in str(e) or "already exists" in str(e).lower():
+                        pass
+                    else:
+                        print(f"[migration] WARN: {table}.{column} 修改失败: {e}")
+
             safe_add_column_if_missing("users", "email", "VARCHAR(128) NULL")
             safe_add_column_if_missing("users", "phone", "VARCHAR(32) NULL")
             safe_add_column_if_missing("users", "name", "VARCHAR(64) DEFAULT ''")
@@ -115,7 +128,7 @@ def create_app():
             safe_add_column_if_missing("plan_tasks", "duration_str", "VARCHAR(32) DEFAULT ''")
             safe_add_column_if_missing("plan_tasks", "calories", "INT DEFAULT 0")
             safe_add_column_if_missing("plan_tasks", "sets", "INT NULL")
-            safe_add_column_if_missing("plan_tasks", "reps", "INT NULL")
+            safe_add_column_if_missing("plan_tasks", "reps", "VARCHAR(32) NULL")  # 修改为 VARCHAR 支持 "8-12" 等格式
             safe_add_column_if_missing("plan_tasks", "rest", "VARCHAR(32) NULL")
 
             safe_add_column_if_missing("articles", "article_type", "VARCHAR(16) DEFAULT 'article'")

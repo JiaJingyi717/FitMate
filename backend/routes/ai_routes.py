@@ -25,7 +25,8 @@ def generate_plan():
         "duration": 4,
         "preferences": "有氧为主/力量为主/均衡",
         "restrictions": "膝盖不好/无器械/...",
-        "notes": "其他需求说明"
+        "notes": "其他需求说明",
+        "save": true  // 是否保存到数据库
     }
     """
     try:
@@ -33,10 +34,9 @@ def generate_plan():
         if not data:
             return fail("请求参数不能为空", 400)
 
-        # 获取用户基本信息（如果有）
+        print(f"[DEBUG] 收到请求数据: {data}")
         user_id = int(get_jwt_identity())
 
-        # 构建用户画像
         user_profile = {
             "goal": data.get("goal", "综合健身"),
             "level": data.get("level", "有基础"),
@@ -45,11 +45,32 @@ def generate_plan():
             "preferences": data.get("preferences", "均衡"),
             "restrictions": data.get("restrictions", ""),
             "notes": data.get("notes", ""),
+            "training_days": data.get("training_days", ""),
         }
+        print(f"[DEBUG] user_profile training_days: {user_profile['training_days']}")
 
-        # 调用 AI 服务
         ai_client = get_ai_client()
         result = ai_client.generate_plan(user_profile)
+
+        print(f"[DEBUG ai_routes] plan_data keys: {result.get('plan', {}).keys() if result.get('success') else 'N/A'}")
+        print(f"[DEBUG ai_routes] weekly_schedule: {result.get('plan', {}).get('weekly_schedule', [])}")
+
+        # 如果需要保存到数据库
+        if data.get("save", True) and result.get("success"):
+            plan_data = result["plan"]
+            from services.plan_service import save_ai_plan
+            print(f"[DEBUG ai_routes] calling save_ai_plan with start_date={data.get('start_date')}, end_date={data.get('end_date')}, training_days={data.get('training_days')}")
+            saved_plan = save_ai_plan(
+                user_id=user_id,
+                plan_data=plan_data,
+                goal=user_profile["goal"],
+                level=user_profile["level"],
+                start_date=data.get("start_date"),
+                end_date=data.get("end_date"),
+                training_days=data.get("training_days", "")
+            )
+            result["saved_plan_id"] = saved_plan["plan_id"]
+            result["saved_plan"] = saved_plan
 
         return ok(data=result)
 

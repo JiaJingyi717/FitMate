@@ -48,3 +48,10 @@ class TestAccount:
     def test_delete_account_success(self, client, auth_headers):
         resp = client.delete("/api/users/account", headers=auth_headers)
         assert resp.status_code == 200
+
+    def test_profile_after_delete_returns_not_found(self, client, auth_headers):
+        delete_resp = client.delete("/api/users/account", headers=auth_headers)
+        assert delete_resp.status_code == 200
+
+        profile_resp = client.get("/api/users/profile", headers=auth_headers)
+        assert profile_resp.status_code == 404

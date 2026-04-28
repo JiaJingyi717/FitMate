@@ -67,7 +67,7 @@ class QwenAIClient:
             raise TimeoutError("🤖 AI 服务响应超时，请稍后重试")
         except requests.exceptions.RequestException as e:
             raise ConnectionError(f"🤖 AI 服务连接失败: {str(e)}")
-        except KeyError as e:
+        except (KeyError, IndexError, TypeError) as e:
             raise ValueError(f"🤖 AI 响应格式异常: {str(e)}")
 
     def generate_plan(self, user_profile: Dict[str, Any]) -> Dict[str, Any]:
@@ -123,22 +123,30 @@ class QwenAIClient:
 
 请确保：
 1. JSON 格式完全正确，可以被 json.loads() 解析
-2. 每周至少3天训练，休息日要合理安排
+2. 每周训练日的 day 字段必须严格等于用户指定的训练日，不要生成其他日期
 3. 动作要科学，考虑用户的身体限制
 4. 热量消耗估算要合理
-"""
+5. 如果用户指定了训练日（如：周一、周三、周六），weekly_schedule 中只能包含这些日期，每周的 day 字段要与用户指定一致
+6. 必须根据用户 level 生成不同强度处方，严格遵守以下规则：
+   - 初学者：基础动作为主，避免高难复合动作；每个动作 2-3 组，8-12 次，休息 60-90 秒
+   - 有基础：中等难度，加入复合动作；每个动作 3-4 组，10-15 次，休息 45-75 秒
+   - 健身达人：高阶动作和更高训练密度；每个动作 4-6 组，6-15 次，休息 30-60 秒
+7. 同一个计划内，不同训练日的内容必须有明显区别（例如推/拉/腿/核心分化），不能每天重复相同动作列表"""
 
         user_message = f"""请为以下用户生成训练计划：
 
 健身目标：{user_profile.get('goal', '综合健身')}
 运动水平：{user_profile.get('level', '有基础')}
 每周训练天数：{user_profile.get('days_per_week', 4)} 天
+用户指定的训练日（严格遵守！）：{user_profile.get('training_days', '周一、周三、周五')}
 计划时长：{user_profile.get('duration', 4)} 周
 用户偏好：{user_profile.get('preferences', '无特殊偏好')}
 身体限制：{user_profile.get('restrictions', '无')}
 额外需求：{user_profile.get('notes', '')}
 
-请生成一个科学、详细的训练计划。"""
+【重要】weekly_schedule 数组中的每个对象的 "day" 字段必须严格等于以下日期之一：{user_profile.get('training_days', '周一、周三、周五')}。不要生成任何其他日期（如周二、周五等）的训练内容。"""
+
+        print(f"[DEBUG] 发送给AI的user_message:\n{user_message}")
 
         messages = [
             {"role": "system", "content": system_prompt},
