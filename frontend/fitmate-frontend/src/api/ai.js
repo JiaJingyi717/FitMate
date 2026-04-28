@@ -9,11 +9,12 @@ export function checkAIHealth() {
   })
 }
 
-// 生成训练计划
+// 生成训练计划（AI生成需要更长时间）
 export function generatePlan(data) {
   return request({
-    url: '/api/plans/ai-generate',
+    url: '/api/ai/generate-plan',
     method: 'post',
+    timeout: 120000, // 120秒超时
     data: {
       goal: data.goal || '综合健身',
       level: data.level || '有基础',
@@ -21,7 +22,11 @@ export function generatePlan(data) {
       duration: data.duration || 4,
       preferences: data.preferences || '均衡',
       restrictions: data.restrictions || '',
-      notes: data.notes || ''
+      notes: data.notes || '',
+      save: data.save !== undefined ? data.save : true,
+      start_date: data.start_date || null,
+      end_date: data.end_date || null,
+      training_days: data.training_days || ''
     }
   })
 }
@@ -48,6 +53,7 @@ export function askCoach(messages, context = {}) {
   return request({
     url: '/api/ai/coach/chat',
     method: 'post',
+    timeout: 120000, // AI 对话可能较慢，单独放宽超时
     data: {
       messages: messages,
       context: context

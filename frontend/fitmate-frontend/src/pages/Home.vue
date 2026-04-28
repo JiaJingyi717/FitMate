@@ -368,6 +368,12 @@ async function handleSendMessage() {
     }
   } catch (error) {
     console.error('发送消息失败:', error)
+    const isTimeout = error?.code === 'ECONNABORTED' || String(error?.message || '').includes('timeout')
+    if (isTimeout) {
+      showError('AI响应较慢，请稍后重试（已延长超时时间）')
+    } else {
+      showError('发送失败，请检查网络后重试')
+    }
     // 尝试检测意图并添加推荐卡片
     const intentRecommendation = detectIntent(text)
 
@@ -375,7 +381,7 @@ async function handleSendMessage() {
     messages.value.push({
       id: Date.now() + 1,
       sender: 'coach',
-      text: '抱歉，我现在无法回复你，请稍后再试。',
+      text: isTimeout ? 'AI响应超时，请稍后重试。' : '抱歉，我现在无法回复你，请稍后再试。',
       time: getTimeStr(),
       recommendation: intentRecommendation
     })

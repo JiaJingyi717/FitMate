@@ -1,6 +1,25 @@
+# ===== 前端依赖 =====
 node_modules/
+
+# ===== npm缓存 =====
+.npm-cache/
+
+# ===== 构建产物 =====
+dist/
+
+# ===== 测试 =====
+coverage/
+
+# ===== Python =====
 __pycache__/
 *.pyc
+
+# ===== 环境变量 =====
 .env
-.vscode
+
+# ===== 编辑器 =====
+.vscode/
+
+# ===== 系统文件 =====
 .DS_Store
+Thumbs.db
