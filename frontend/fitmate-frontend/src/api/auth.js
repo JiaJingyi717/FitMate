@@ -3,7 +3,7 @@ import request from './request'
 import { mockLogin, mockRegister, mockForgotPassword, mockResetPassword, mockLogout } from '../mocks/auth.js'
 
 // 开关（非常重要）
-const USE_MOCK = true
+const USE_MOCK = false
 // 注册
 export function register(data) {
   if (USE_MOCK) {

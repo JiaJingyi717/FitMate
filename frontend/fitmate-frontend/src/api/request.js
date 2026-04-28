@@ -2,7 +2,7 @@
 import axios from 'axios'
 
 const service = axios.create({
-  baseURL: 'http://127.0.0.1:5000',
+  baseURL: '',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json'
@@ -12,7 +12,12 @@ const service = axios.create({
 // 请求拦截器：自动带 token
 service.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token')
+    // 优先从 sessionStorage 获取 token（当前会话）
+    let token = sessionStorage.getItem('token')
+    // 如果 sessionStorage 没有，从 localStorage 获取（记住我）
+    if (!token) {
+      token = localStorage.getItem('token')
+    }
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -25,6 +30,11 @@ service.interceptors.request.use(
 service.interceptors.response.use(
   (response) => {
     const res = response.data
+
+    // 处理无数据响应（如 204 No Content）
+    if (!res) {
+      return { code: 200, message: 'success', data: {} }
+    }
 
     // 你的后端统一返回 { code, message, data }
     if (res.code !== 200) {

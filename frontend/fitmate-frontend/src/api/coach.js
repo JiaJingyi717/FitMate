@@ -3,7 +3,7 @@ import request from './request'
 import { mockGetCoachList, mockInitCoachSession, mockSwitchCoach, mockSendCoachMessage, mockResetCoachSession } from '../mocks/coach.js'
 
 // 开关（非常重要）
-const USE_MOCK = true
+const USE_MOCK = false
 
 // 获取教练列表
 export function getCoachList() {

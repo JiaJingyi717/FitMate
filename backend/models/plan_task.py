@@ -12,7 +12,7 @@ class PlanTask(db.Model):
     duration_str = db.Column(db.String(32), default="")
     calories = db.Column(db.Integer, default=0)
     sets = db.Column(db.Integer, nullable=True)
-    reps = db.Column(db.Integer, nullable=True)
+    reps = db.Column(db.String(32), nullable=True)  # 支持字符串格式如 "8-12"、"30秒"
     rest = db.Column(db.String(32), nullable=True)
     description = db.Column(db.Text, default="")
     target_date = db.Column(db.Date, nullable=True)
