@@ -32,7 +32,7 @@ export function mockRegister(data) {
   })
 }
 
-export function mockForgotPassword(data) {
+export function mockForgotPassword(_data) {
   return new Promise((resolve) => {
     setTimeout(() => {
       resolve({
@@ -43,7 +43,7 @@ export function mockForgotPassword(data) {
   })
 }
 
-export function mockResetPassword(data) {
+export function mockResetPassword(_data) {
   return new Promise((resolve) => {
     setTimeout(() => {
       resolve({
