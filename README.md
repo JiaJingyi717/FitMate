@@ -1,5 +1,6 @@
 # FitMate——README
 
+[![CI](https://github.com/JiaJingyi717/FitMate/actions/workflows/ci.yml/badge.svg)](https://github.com/JiaJingyi717/FitMate/actions)
 [![Backend Coverage](https://codecov.io/gh/JiaJingyi717/FitMate/branch/main/graph/badge.svg?flag=backend)](https://codecov.io/gh/JiaJingyi717/FitMate)
 [![Frontend Coverage](https://codecov.io/gh/JiaJingyi717/FitMate/branch/main/graph/badge.svg?flag=frontend)](https://codecov.io/gh/JiaJingyi717/FitMate)
 
@@ -52,8 +53,9 @@ FitMate — AI 智能健身助手
 
 - 后端测试目录：`backend/tests/`
 - 前端测试目录：`frontend/fitmate-frontend/src/__tests__/`
-- GitHub Actions 覆盖率工作流：`.github/workflows/coverage.yml`
+- **CI 工作流**（Lint + 测试 + Codecov）：`.github/workflows/ci.yml`
+- 仅覆盖率工作流（可选/历史）：`.github/workflows/coverage.yml`
 - 后端覆盖率报告文件：`backend/coverage.xml`
 - 前端覆盖率报告文件：`frontend/fitmate-frontend/coverage/lcov.info`
 
-> 说明：后端与前端覆盖率徽章均已启用，数据由 GitHub Actions + Codecov 自动更新。
+> 说明：CI 与 Codecov 徽章在 `main` 分支成功运行后由 GitHub Actions 自动更新。
