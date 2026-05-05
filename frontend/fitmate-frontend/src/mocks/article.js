@@ -358,7 +358,7 @@ export function mockGetArticleList(params) {
 
 // 获取文章详情
 export function mockGetArticleDetail(id) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     setTimeout(() => {
       const article = mockArticleDetails[id] || mockArticles.find(item => item.id === parseInt(id))
       if (article) {

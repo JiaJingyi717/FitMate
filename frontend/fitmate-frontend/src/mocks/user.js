@@ -105,7 +105,7 @@ export function mockGetAchievements() {
 
 // 修改密码
 export function mockChangePassword(data) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     setTimeout(() => {
       if (data.oldPassword === 'wrong_password') {
         resolve({
