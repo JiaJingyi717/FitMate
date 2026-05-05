@@ -3,7 +3,7 @@ AI 智能功能路由
 包含：生成训练计划、饮食建议、AI教练、进度分析
 """
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from services.ai_service import get_ai_client
 from routes._shared import ok, fail
@@ -244,7 +244,7 @@ def health_check():
             "model": ai_client.model,
             "api_base": ai_client.api_base
         })
-    except ValueError as e:
+    except ValueError:
         return ok(data={
             "status": "not_configured",
             "message": "请在 .env 文件中配置 QWEN_API_KEY"

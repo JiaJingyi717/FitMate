@@ -129,7 +129,6 @@ def collect_article(user_id: int, article: Article):
 
 
 def get_article_comments(article_id: int, page: int = 1, page_size: int = 20):
-    from datetime import timedelta
     query = db.session.query(ArticleComment).filter_by(article_id=article_id).order_by(
         ArticleComment.id.asc()
     )

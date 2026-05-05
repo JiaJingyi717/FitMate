@@ -1,5 +1,4 @@
 """AI教练模块 API 测试（列表/会话初始化/切换/对话/重置）。"""
-import pytest
 
 
 class TestCoachesList:

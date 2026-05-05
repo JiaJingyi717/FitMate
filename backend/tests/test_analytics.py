@@ -1,5 +1,4 @@
 """数据分析模块 API 测试（overview/category-distribution/duration-trend/ai-suggestions）。"""
-import pytest
 
 
 class TestAnalyticsOverview:
