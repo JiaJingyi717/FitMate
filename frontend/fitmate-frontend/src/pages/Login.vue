@@ -203,7 +203,7 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { login, register, logout } from '../api/auth'
+import { login, register } from '../api/auth'
 
 const router = useRouter()
 const activeTab = ref('login')
@@ -351,22 +351,6 @@ async function handleRegister() {
     console.error('注册失败：', error)
   } finally {
     loading.value = false
-  }
-}
-
-// 退出登录函数（供其他地方调用）
-async function handleLogout() {
-  try {
-    await logout()
-  } catch (e) {
-    console.error('退出登录请求失败', e)
-  } finally {
-    // 清除所有存储
-    localStorage.removeItem('token')
-    localStorage.removeItem('tokenExpiry')
-    localStorage.removeItem('userId')
-    sessionStorage.removeItem('token')
-    router.push('/login')
   }
 }
 </script>

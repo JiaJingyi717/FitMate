@@ -3,14 +3,24 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const requestUseMock = vi.fn()
 const responseUseMock = vi.fn()
 
+function createAxiosInstanceMock() {
+  return {
+    defaults: { headers: { common: {} } },
+    interceptors: {
+      request: { use: requestUseMock, eject: vi.fn() },
+      response: { use: responseUseMock, eject: vi.fn() },
+    },
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+    request: vi.fn(),
+  }
+}
+
 vi.mock('axios', () => ({
   default: {
-    create: vi.fn(() => ({
-      interceptors: {
-        request: { use: requestUseMock },
-        response: { use: responseUseMock },
-      },
-    })),
+    create: vi.fn(() => createAxiosInstanceMock()),
   },
 }))
 
