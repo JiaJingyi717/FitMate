@@ -445,9 +445,6 @@ const getSuggestionIcon = (index) => {
   return icons[index % icons.length]
 }
 
-// 转换 API range 参数
-const apiRange = computed(() => timeRange.value === '7days' ? '7d' : '30d')
-
 // 监听时间范围变化
 watch(timeRange, () => {
   loadData()
@@ -509,7 +506,7 @@ const visibleXLabels = computed(() => {
 
   // 7天显示所有标签
   if (dataLength <= 7) {
-    return data.map((item, index) => ({
+    return data.map((item) => ({
       x: item.x,
       label: formatDate(item.label)
     }))
@@ -555,10 +552,6 @@ const maxDuration = computed(() => {
   if (trendData.value.length === 0) return 100
   return Math.max(...trendData.value.map(item => item.duration), 1)
 })
-
-const getBarHeight = (duration) => {
-  return (duration / maxDuration.value) * 100
-}
 </script>
 
 <style scoped>

@@ -52,7 +52,7 @@
 
 ## PR 链接
 
-- PR #21：https://github.com/JiaJingyi717/FitMate/pull/21
+- PR #24：https://github.com/JiaJingyi717/FitMate/pull/24
 
 ## 遇到问题与解决
 

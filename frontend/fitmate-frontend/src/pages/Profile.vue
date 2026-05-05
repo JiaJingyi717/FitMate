@@ -534,9 +534,10 @@ async function loadUserStats() {
 function formatStatValue(key, value) {
   if (value === null || value === undefined) return '--'
   switch (key) {
-    case 'totalDuration':
+    case 'totalDuration': {
       const hours = Math.floor(value / 60)
       return hours > 0 ? `${hours}小时` : `${value}分钟`
+    }
     case 'totalCalories':
       return value.toLocaleString()
     case 'completedPlans':
