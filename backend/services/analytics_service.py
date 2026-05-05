@@ -54,7 +54,6 @@ def build_category_distribution(user_id: int, range_: str = "7d"):
 
 
 def build_duration_trend(user_id: int, range_: str = "7d"):
-    since = _parse_range(range_)
     days = 30 if range_ == "30d" else 7
     from models.record import TrainingRecord
     trend = []

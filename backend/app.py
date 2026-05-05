@@ -79,7 +79,7 @@ def create_app():
             def safe_add_column_if_missing(table, column, col_type):
                 try:
                     existing = db.session.execute(
-                        text(f"SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=:t AND COLUMN_NAME=:c"),
+                        text("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=:t AND COLUMN_NAME=:c"),
                         {"t": table, "c": column}
                     ).fetchone()
                     if existing:

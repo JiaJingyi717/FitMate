@@ -1,0 +1,89 @@
+# 持续集成：Lint + 测试 + 覆盖率（与作业 docs/CICD 配置.md 要求一致；业务逻辑未在此文件中配置）
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Ruff
+        run: ruff check .
+
+      - name: Pytest with coverage
+        run: pytest
+
+      - name: Upload backend coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: backend/coverage.xml
+          flags: backend
+          disable_search: true
+          fail_ci_if_error: false
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend/fitmate-frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/fitmate-frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Tests with coverage
+        run: |
+          rm -rf coverage
+          npm run test:coverage -- --coverage.reporter=text --coverage.reporter=html --coverage.reporter=lcov
+
+      - name: Prepare lcov for Codecov
+        run: |
+          if [ -f coverage/lcov.info ]; then
+            cp coverage/lcov.info ../../frontend-lcov.info
+            ls -la ../../frontend-lcov.info
+          else
+            echo "ERROR: coverage/lcov.info not generated"
+            exit 1
+          fi
+
+      - name: Upload frontend coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: frontend-lcov.info
+          flags: frontend
+          disable_search: true
+          fail_ci_if_error: false

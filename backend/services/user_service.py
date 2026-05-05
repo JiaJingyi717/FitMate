@@ -46,7 +46,6 @@ def update_user_profile(user, payload: dict):
 def get_user_stats(user_id: int):
     from datetime import date, timedelta
     from models.plan import TrainingPlan
-    from models.plan_task import PlanTask
     from models.record import TrainingRecord
 
     today = date.today()

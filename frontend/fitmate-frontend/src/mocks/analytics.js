@@ -12,11 +12,6 @@ function getRecentDates(days) {
   return dates
 }
 
-// 生成随机数据
-function generateRandomData(count, min, max) {
-  return Array.from({ length: count }, () => Math.floor(Math.random() * (max - min + 1)) + min)
-}
-
 export function mockGetAnalyticsOverview(params) {
   return new Promise((resolve) => {
     setTimeout(() => {

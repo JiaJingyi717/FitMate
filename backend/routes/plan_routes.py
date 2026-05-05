@@ -3,7 +3,6 @@ from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from models.plan import TrainingPlan
 from models.plan_task import PlanTask
-from models.record import TrainingRecord
 from services.plan_service import (
     add_task_to_plan,
     ai_generate_plan,
@@ -15,7 +14,6 @@ from services.plan_service import (
     list_plan_tasks,
     list_training_plans,
     remove_task_from_plan,
-    update_training_plan,
 )
 from utils.extensions import db
 from utils.response import fail, ok

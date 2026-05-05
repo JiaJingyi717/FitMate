@@ -1,5 +1,4 @@
 """知识库/文章模块 API 测试（列表/详情/点赞/收藏/评论/收藏列表）。"""
-import pytest
 
 
 class TestArticlesList:

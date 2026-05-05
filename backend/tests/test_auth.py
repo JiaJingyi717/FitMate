@@ -1,5 +1,4 @@
 """认证模块 API 测试（注册/登录/登出）。"""
-import pytest
 
 
 class TestRegister:

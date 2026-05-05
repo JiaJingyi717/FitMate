@@ -216,48 +216,6 @@ const taskTemplates = {
   ]
 }
 
-// 根据目标生成训练任务
-function generateTasksByGoal(goal, daysPerWeek) {
-  const tasks = []
-  const planTaskTemplates = {
-    '减脂': ['热身', '有氧', 'HIIT', '核心', '拉伸'],
-    '增肌': ['热身', '胸部', '背部', '腿部', '拉伸'],
-    '塑形': ['热身', '有氧', '核心', 'HIIT', '拉伸'],
-    '综合体能提升': ['热身', '有氧', '胸部', '背部', '腿部', '核心', '拉伸']
-  }
-
-  const types = planTaskTemplates[goal] || planTaskTemplates['综合体能提升']
-  let taskId = 1
-
-  // 每周生成对应类型的训练
-  for (let i = 0; i < daysPerWeek; i++) {
-    // 每天选择2-3个类型的动作
-    const dayTypes = types.slice(1, Math.min(1 + Math.floor(Math.random() * 2) + 2, types.length))
-
-    dayTypes.forEach(type => {
-      const typeTasks = taskTemplates[type]
-      if (typeTasks && typeTasks.length > 0) {
-        const task = typeTasks[Math.floor(Math.random() * typeTasks.length)]
-        tasks.push({
-          id: taskId++,
-          name: task.name,
-          type: type,
-          duration: task.duration,
-          durationMinutes: task.durationMinutes,
-          calories: task.calories,
-          sets: task.sets || null,
-          reps: task.reps || null,
-          rest: task.rest || null,
-          isCompleted: false,
-          planId: null
-        })
-      }
-    })
-  }
-
-  return tasks
-}
-
 // ==================== Mock 函数 ====================
 
 // 获取训练计划页顶部统计概览
@@ -629,14 +587,6 @@ export function mockGenerateAiPlan(data) {
       }
 
       // 生成训练类型映射
-      const goalTrainingTypes = {
-        '减脂': ['热身', '有氧', 'HIIT', '核心', '拉伸'],
-        '增肌': ['热身', '胸部', '背部', '腿部', '拉伸'],
-        '塑形': ['热身', '有氧', '核心', 'HIIT', '拉伸'],
-        '综合体能提升': ['热身', '有氧', '胸部', '背部', '腿部', '核心', '拉伸']
-      }
-      const trainingTypes = goalTrainingTypes[goal] || goalTrainingTypes['综合体能提升']
-
       // 使用辅助函数生成完整排程
       const startDateObj = new Date(startDate)
       const { weeklySchedule, allTasks } = generateFullSchedule(startDateObj, trainingDays, 4)
@@ -699,7 +649,6 @@ export function mockGetTodayTasks() {
       // 模拟获取今日任务（从计划详情中筛选）
       const today = new Date()
       today.setHours(0, 0, 0, 0)
-      const dayOfWeek = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][today.getDay()]
 
       // 生成今日任务（模拟从计划1中获取）
       const tasks = [

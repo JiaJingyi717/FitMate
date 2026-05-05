@@ -39,7 +39,7 @@ export function mockSwitchCoach(data) {
   })
 }
 
-export function mockSendCoachMessage(data) {
+export function mockSendCoachMessage(_data) {
   return new Promise((resolve) => {
     setTimeout(() => {
       resolve({
