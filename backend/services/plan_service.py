@@ -10,7 +10,7 @@ from utils.extensions import db
 def list_plan_overview(user_id: int):
     today = date.today()
     total_plans = db.session.query(TrainingPlan).filter_by(user_id=user_id).count()
-    done_plans = db.session.query(TrainingPlan).filter_by(user_id=user_id, status="done").count()
+    _ = db.session.query(TrainingPlan).filter_by(user_id=user_id, status="done").count()
 
     today_tasks = (
         db.session.query(PlanTask)
@@ -21,7 +21,11 @@ def list_plan_overview(user_id: int):
     done_today = (
         db.session.query(PlanTask)
         .join(TrainingPlan, PlanTask.plan_id == TrainingPlan.id)
-        .filter(TrainingPlan.user_id == user_id, PlanTask.target_date == today, PlanTask.is_completed == True)
+        .filter(
+            TrainingPlan.user_id == user_id,
+            PlanTask.target_date == today,
+            PlanTask.is_completed.is_(True),
+        )
         .count()
     )
 
@@ -84,7 +88,6 @@ def get_plan_detail(plan_id: int, user_id: int):
 
     # Python weekday(): 周一=0, 周二=1, ... , 周日=6
     week_days = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
-    day_map = {"周一": 0, "周二": 1, "周三": 2, "周四": 3, "周五": 4, "周六": 5, "周日": 6}
 
     weekly_schedule = []
     task_by_week = {}
@@ -92,7 +95,6 @@ def get_plan_detail(plan_id: int, user_id: int):
     for t in tasks:
         if t.target_date:
             week_num = (t.target_date - (plan.start_date or date.today())).days // 7 + 1
-            day_of_week = week_days[t.target_date.weekday()]
             if week_num not in task_by_week:
                 task_by_week[week_num] = []
             task_by_week[week_num].append({
@@ -253,7 +255,7 @@ def delete_plan(plan):
     except Exception as e:
         print(f"[delete_plan] 发生异常: {type(e).__name__}: {e}")
         db.session.rollback()
-        print(f"[delete_plan] 事务已回滚")
+        print("[delete_plan] 事务已回滚")
         raise
 
 
@@ -607,7 +609,6 @@ def save_ai_plan(user_id: int, plan_data: dict, goal: str, level: str, start_dat
     num_weeks = max(1, duration_weeks)
     for week_idx in range(num_weeks):
         # 对于每周，按用户选择的训练日顺序处理
-        week_day_count = 0
         for day_idx, day_name in enumerate(user_day_order):
             if day_name not in day_data_map:
                 continue

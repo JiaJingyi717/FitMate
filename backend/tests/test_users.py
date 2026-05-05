@@ -1,5 +1,4 @@
 """个人中心模块 API 测试（profile/achievements/password/account）。"""
-import pytest
 
 
 class TestProfile:

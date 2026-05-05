@@ -1,17 +1,8 @@
 # ===== 前端依赖 =====
 node_modules/
-
-# ===== npm缓存 =====
 .npm-cache/
-
-# ===== 构建产物 =====
-dist/
-
-# ===== 测试 =====
-coverage/
-
-# ===== Python =====
 __pycache__/
+.ruff_cache/
 *.pyc
 
 # ===== 环境变量 =====

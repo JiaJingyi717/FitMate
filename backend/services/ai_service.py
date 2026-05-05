@@ -6,7 +6,7 @@
 import os
 import json
 import requests
-from typing import Optional, Dict, Any, List
+from typing import Dict, Any, List
 from dotenv import load_dotenv
 
 # 加载 .env 文件
@@ -314,7 +314,7 @@ class QwenAIClient:
         # 添加用户上下文
         context_text = ""
         if user_context:
-            context_text = f"\n\n【用户背景】（供参考）\n"
+            context_text = "\n\n【用户背景】（供参考）\n"
             if user_context.get('fitness_level'):
                 context_text += f"- 健身水平：{user_context['fitness_level']}\n"
             if user_context.get('current_plan'):

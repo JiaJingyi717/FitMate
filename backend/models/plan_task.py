@@ -1,4 +1,3 @@
-from models._shared import _utcnow
 from utils.extensions import db
 
 

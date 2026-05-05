@@ -2,7 +2,6 @@ from flask import Blueprint, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from models.article import Article
-from models.article_interaction import ArticleComment
 from services.article_service import (
     collect_article,
     comment_article,
