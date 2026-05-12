@@ -297,6 +297,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { getAnalyticsOverview, getCategoryDistribution, getDurationTrend, getAiSuggestions } from '../api/analytics.js'
 import { analyzeProgress } from '../api/ai'
+import logger from '../utils/logger'
 
 const timeRange = ref('7days')
 const loading = ref(false)
@@ -376,8 +377,8 @@ const loadData = async () => {
     // 获取 AI 进度分析
     await loadAIAnalysis(range)
 
-  } catch (error) {
-    console.error('加载分析数据失败:', error)
+  } catch {
+    logger.error('Analysis', '加载分析数据失败')
   } finally {
     loading.value = false
   }
@@ -404,8 +405,8 @@ const loadAIAnalysis = async (range) => {
     if (res.code === 200 && res.data && res.data.analysis) {
       aiAnalysis.value = res.data.analysis
     }
-  } catch (error) {
-    console.error('加载AI分析失败:', error)
+  } catch {
+    logger.error('Analysis', '加载AI分析失败')
     // 降级：使用默认数据
     aiAnalysis.value = {
       summary: '本周训练状态良好',

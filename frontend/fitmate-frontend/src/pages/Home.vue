@@ -200,6 +200,7 @@
 import { ref, nextTick, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { askCoach } from '../api/ai'
+import logger from '../utils/logger'
 
 const router = useRouter()
 
@@ -367,7 +368,7 @@ async function handleSendMessage() {
       throw new Error(res.message || '获取回复失败')
     }
   } catch (error) {
-    console.error('发送消息失败:', error)
+    logger.error('Home', '发送消息失败')
     const isTimeout = error?.code === 'ECONNABORTED' || String(error?.message || '').includes('timeout')
     if (isTimeout) {
       showError('AI响应较慢，请稍后重试（已延长超时时间）')
@@ -398,7 +399,7 @@ function initSpeechRecognition() {
 
   if (!SpeechRecognition) {
     isVoiceSupported.value = false
-    console.warn('当前浏览器不支持语音识别')
+    logger.warn('Home', '当前浏览器不支持语音识别')
     return null
   }
 
@@ -428,7 +429,7 @@ function initSpeechRecognition() {
   }
 
   recognizer.onerror = (event) => {
-    console.error('语音识别错误:', event.error)
+    logger.error('Home', '语音识别错误:', event.error)
     isRecording.value = false
 
     switch (event.error) {

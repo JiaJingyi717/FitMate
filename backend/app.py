@@ -4,6 +4,7 @@ import os
 
 from config import Config
 from data.seed_data import seed_all
+from utils.security_config import validate_app_secrets
 from routes.analytics_routes import analytics_bp
 from routes.articles_routes import articles_bp
 from routes.auth_routes import auth_bp
@@ -21,6 +22,18 @@ def create_app():
     CORS(app)
     db.init_app(app)
     jwt.init_app(app)
+    validate_app_secrets(app)
+
+    @app.after_request
+    def _security_headers(response):
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault(
+            "Permissions-Policy",
+            "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()",
+        )
+        return response
 
     @app.get("/")
     def index():

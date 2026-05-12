@@ -547,6 +547,7 @@ import {
   completeTodayTask
 } from '../api/plan'
 import { generatePlan } from '../api/ai'
+import logger from '../utils/logger'
 
 const activeTab = ref('all')
 const showAIDialog = ref(false)
@@ -639,7 +640,6 @@ const todayTasks = ref([])
 async function loadOverview() {
   try {
     const res = await getPlanOverview()
-    console.log('📈 getPlanOverview 响应:', res)
     if (res.code === 200 && res.data) {
       overviewStats.value = {
         completedTasks: res.data.completedTasks || 0,
@@ -648,25 +648,18 @@ async function loadOverview() {
         totalCalories: res.data.totalCalories || 0,
         planCount: res.data.planCount || 0
       }
-      console.log('✅ overviewStats 已更新:', overviewStats.value)
-    } else {
-      console.warn('⚠️ 概览响应格式异常:', res)
     }
-  } catch (error) {
-    console.error('❌ 加载概览失败:', error)
+  } catch {
+    logger.error('Plan', '加载概览失败')
   }
 }
 
 // 加载计划列表
 async function loadPlanList() {
-  console.log('🔄 正在加载计划列表...')
   isLoading.value = true
   try {
     const res = await getPlanList()
-    console.log('📋 getPlanList 响应:', res)
     if (res && res.code === 200 && res.data) {
-      console.log('📊 原始数据:', res.data)
-      // 安全地处理数据，确保不会因为字段类型错误而崩溃
       if (Array.isArray(res.data)) {
         plans.value = res.data.map(p => {
           try {
@@ -686,23 +679,17 @@ async function loadPlanList() {
               weeklySchedule: Array.isArray(p.weeklySchedule) ? p.weeklySchedule : [],
               totalCalories: Number(p.totalCalories) || 0
             }
-          } catch (mapError) {
-            console.error('❌ 单个计划映射失败:', p, mapError)
+          } catch {
+            logger.error('Plan', '解析计划数据失败')
             return null
           }
         }).filter(p => p !== null)
-        console.log('✅ plans 已更新，长度:', plans.value.length)
       } else {
-        console.warn('⚠️ res.data 不是数组:', typeof res.data)
         plans.value = []
       }
-    } else {
-      console.warn('⚠️ 响应格式异常:', res)
     }
-  } catch (error) {
-    console.error('❌ 加载计划列表失败:', error)
-    console.error('❌ error.message:', error.message)
-    console.error('❌ error.stack:', error.stack)
+  } catch {
+    logger.error('Plan', '加载计划列表失败')
     showError('加载计划失败，请刷新重试')
   } finally {
     isLoading.value = false
@@ -721,8 +708,8 @@ async function loadTodayTasks() {
       // 更新今日任务总数
       overviewStats.value.totalTasks = todayTasks.value.length
     }
-  } catch (error) {
-    console.error('加载今日任务失败:', error)
+  } catch {
+    logger.error('Plan', '加载今日任务失败')
   }
 }
 
@@ -871,8 +858,8 @@ const toggleTaskComplete = async (task) => {
 
   try {
     await completeTodayTask(task.id, { isCompleted: newCompleted })
-  } catch (error) {
-    console.error('更新任务状态失败:', error)
+  } catch {
+    logger.error('Plan', '更新任务状态失败')
     // 回滚UI
     task.isCompleted = currentCompleted
     task.completed = currentCompleted
@@ -893,7 +880,6 @@ const toggleTaskComplete = async (task) => {
 const deletePlan = async (planId) => {
   // 防抖锁：防止重复点击
   if (deletePlan.executing && deletePlan.executing.has(planId)) {
-    console.log('⚠️ 删除操作正在进行中，请勿重复点击')
     return
   }
 
@@ -903,8 +889,6 @@ const deletePlan = async (planId) => {
   }
   deletePlan.executing.add(planId)
 
-  console.log('🔴 [删除开始] planId:', planId)
-
   if (!confirm('确定要删除这个计划吗？')) {
     deletePlan.executing.delete(planId)
     return
@@ -912,67 +896,48 @@ const deletePlan = async (planId) => {
 
   // 找到要删除的计划（用于回滚）
   const planToRemove = plans.value.find(p => p.id === planId)
-  console.log('🔴 找到要删除的计划:', planToRemove)
-  if (!planToRemove) return
+  if (!planToRemove) {
+    deletePlan.executing.delete(planId)
+    return
+  }
 
   // 乐观更新：先更新 UI，给用户即时反馈
   plans.value = plans.value.filter(p => p.id !== planId)
   overviewStats.value.planCount--
-  console.log('🔴 UI 已更新，当前 plans 数量:', plans.value.length)
 
   // 本地 AI 计划（ID 以 ai- 开头）不需要调用后端 API
   if (planId.toString().startsWith('ai-')) {
-    console.log('🔴 本地 AI 计划，直接完成删除')
     deletePlan.executing.delete(planId)
-    // 只刷新今日任务（不需要刷新计划列表，因为 AI 计划不在后端）
     try {
       await loadTodayTasks()
-      console.log('🔴 今日任务已刷新')
-    } catch (e) {
-      console.error('⚠️ 刷新今日任务失败:', e)
+    } catch {
+      logger.warn('Plan', '刷新今日任务失败')
     }
     return
   }
 
   try {
-    console.log('🔴 调用 apiDeletePlan...')
     const res = await apiDeletePlan(planId)
-    console.log('🔴 API 响应:', res)
-    console.log('🔴 响应类型:', typeof res)
-    console.log('🔴 res.code:', res?.code)
 
     // 如果后端返回明确的业务错误码
     if (res && res.code && res.code !== 200) {
-      console.error('🔴 业务错误，code:', res.code, 'message:', res.message)
       throw new Error(res.message || '删除失败')
     }
 
-    // 删除成功，尝试刷新数据（即使刷新失败也不影响删除结果）
-    console.log('🔴 删除成功，开始刷新数据...')
+    // 删除成功，尝试刷新数据
     try {
-      const results = await Promise.all([loadPlanList(), loadOverview(), loadTodayTasks()])
-      console.log('🔴 刷新完成，results:', results)
-    } catch (refreshError) {
-      console.error('⚠️ 刷新数据失败（但删除可能已成功）:', refreshError)
-      console.error('⚠️ refreshError.stack:', refreshError.stack)
-      // 不抛出异常，不回滚 UI
-    } finally {
-      // 释放锁
-      deletePlan.executing.delete(planId)
+      await Promise.all([loadPlanList(), loadOverview(), loadTodayTasks()])
+    } catch {
+      logger.warn('Plan', '刷新数据失败（但删除可能已成功）')
     }
-  } catch (error) {
-    console.error('❌ 删除计划捕获到异常:', error)
-    console.error('❌ error.name:', error.name)
-    console.error('❌ error.message:', error.message)
-    console.error('❌ error.response:', error.response)
-
+  } catch {
+    logger.error('Plan', '删除计划失败')
     // 回滚 UI
     plans.value.unshift(planToRemove)
     overviewStats.value.planCount++
-    console.log('❌ UI 已回滚')
     showError('删除计划失败，请刷新页面确认')
   } finally {
-    // 确保锁被释放（无论成功还是失败）
+    // 确保锁被释放
     if (deletePlan.executing && deletePlan.executing.has(planId)) {
       deletePlan.executing.delete(planId)
     }
@@ -994,8 +959,8 @@ const openPlanDetail = async (plan) => {
       selectedPlan.value = res.data
       showPlanDetail.value = true
     }
-  } catch (error) {
-    console.error('获取计划详情失败:', error)
+  } catch {
+    console.warn('Plan', '获取计划详情失败')
     showError('加载计划详情失败')
   } finally {
     isLoading.value = false
@@ -1031,7 +996,7 @@ const generateAIPlan = async () => {
       end_date: aiForm.value.endDate || defaultEndDate,
       training_days: trainingDaysStr
     }
-    console.log('📤 AI 请求数据:', requestData)
+    logger.debug('Plan', 'AI 请求数据', requestData)
     
     // 调用 AI API 生成计划
     const res = await generatePlan(requestData)
@@ -1188,7 +1153,7 @@ const generateAIPlan = async () => {
       throw new Error(res.message || '生成失败')
     }
   } catch (error) {
-    console.error('AI生成计划失败:', error)
+    logger.error('Plan', 'AI生成计划失败')
     showError(error.message || '生成计划失败，请重试')
   } finally {
     isLoading.value = false
@@ -1261,7 +1226,7 @@ const saveManualPlan = async () => {
       throw new Error(res.message || '创建失败')
     }
   } catch (error) {
-    console.error('创建计划失败:', error)
+    logger.error('Plan', '创建计划失败')
     showError(error.message || '创建计划失败，请重试')
   } finally {
     isLoading.value = false

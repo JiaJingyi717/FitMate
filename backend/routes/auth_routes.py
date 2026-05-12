@@ -1,3 +1,6 @@
+import os
+import secrets
+
 from flask import Blueprint, request
 from flask_jwt_extended import jwt_required
 from werkzeug.security import generate_password_hash
@@ -72,15 +75,23 @@ def forgot_password():
     return ok(msg="verification code sent")
 
 
+def _expected_password_reset_code():
+    """必须通过环境变量配置验证码，禁止在代码中写死通用后门。"""
+    return (os.getenv("FITMATE_PASSWORD_RESET_CODE") or "").strip()
+
+
 @auth_bp.post("/auth/reset-password")
 def reset_password():
     payload = request.get_json(silent=True) or {}
     email = (payload.get("email") or "").strip() or None
     phone = (payload.get("phone") or "").strip() or None
-    code = payload.get("code", "")
+    code = (payload.get("code") or "").strip()
     new_password = payload.get("newPassword", "") or ""
 
-    if code != "123456":
+    expected = _expected_password_reset_code()
+    if not expected:
+        return fail("password reset is not configured on server", 503)
+    if not secrets.compare_digest(code, expected):
         return fail("verification code is incorrect or expired", 400)
     if not new_password or len(new_password) < 6:
         return fail("newPassword must be at least 6 characters", 400)
