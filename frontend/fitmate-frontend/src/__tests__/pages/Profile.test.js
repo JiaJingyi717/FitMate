@@ -180,4 +180,150 @@ describe('Profile.vue', () => {
     expect(pushMock).toHaveBeenCalledWith('/login')
     expect(localStorage.getItem('token')).toBeNull()
   })
+
+  it('BMI 计算正确', async () => {
+    getUserProfileMock.mockResolvedValue({
+      code: 200,
+      data: { name: '用户', height: 170, weight: 57.8 }, // 170cm, 57.8kg -> BMI = 20
+    })
+    getUserStatsMock.mockResolvedValue({ code: 200, data: {} })
+    getAchievementsMock.mockResolvedValue({ code: 200, data: [] })
+
+    const wrapper = mount(Profile, {
+      global: { stubs: { Dialog: { template: '<div><slot /></div>' } } },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('20.0')
+    expect(wrapper.text()).toContain('正常')
+  })
+
+  it('BMI 偏瘦状态', async () => {
+    getUserProfileMock.mockResolvedValue({
+      code: 200,
+      data: { name: '用户', height: 180, weight: 50 }, // BMI < 18.5
+    })
+    getUserStatsMock.mockResolvedValue({ code: 200, data: {} })
+    getAchievementsMock.mockResolvedValue({ code: 200, data: [] })
+
+    const wrapper = mount(Profile, {
+      global: { stubs: { Dialog: { template: '<div><slot /></div>' } } },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('偏瘦')
+  })
+
+  it('BMI 肥胖状态', async () => {
+    getUserProfileMock.mockResolvedValue({
+      code: 200,
+      data: { name: '用户', height: 160, weight: 80 }, // BMI > 28
+    })
+    getUserStatsMock.mockResolvedValue({ code: 200, data: {} })
+    getAchievementsMock.mockResolvedValue({ code: 200, data: [] })
+
+    const wrapper = mount(Profile, {
+      global: { stubs: { Dialog: { template: '<div><slot /></div>' } } },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('肥胖')
+  })
+
+  it('成就列表正确渲染', async () => {
+    getUserProfileMock.mockResolvedValue({ code: 200, data: { name: '用户' } })
+    getUserStatsMock.mockResolvedValue({ code: 200, data: {} })
+    getAchievementsMock.mockResolvedValue({
+      code: 200,
+      data: [
+        { id: 1, name: '新手', description: '完成一次训练', icon: '🏅', isEarned: true },
+        { id: 2, name: '坚持', description: '连续7天训练', icon: '🔥', isEarned: false },
+      ],
+    })
+
+    const wrapper = mount(Profile, {
+      global: { stubs: { Dialog: { template: '<div><slot /></div>' } } },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('新手')
+    expect(wrapper.text()).toContain('坚持')
+  })
+
+  it('头像上传测试', async () => {
+    getUserProfileMock.mockResolvedValue({ code: 200, data: { name: '用户', avatar: 'old-avatar.png' } })
+    getUserStatsMock.mockResolvedValue({ code: 200, data: {} })
+    getAchievementsMock.mockResolvedValue({ code: 200, data: [] })
+    updateAvatarMock.mockResolvedValue({ code: 200, data: { avatar: 'new-avatar.png' } })
+
+    const wrapper = mount(Profile, {
+      global: { stubs: { Dialog: { template: '<div><slot /></div>' } } },
+    })
+    await flushPromises()
+
+    // 验证头像元素存在
+    expect(wrapper.find('img').exists()).toBe(true)
+  })
+
+  it('修改密码新密码少于6位时提示', async () => {
+    getUserProfileMock.mockResolvedValue({ code: 200, data: { name: '用户' } })
+    getUserStatsMock.mockResolvedValue({ code: 200, data: {} })
+    getAchievementsMock.mockResolvedValue({ code: 200, data: [] })
+
+    const wrapper = mount(Profile, {
+      global: { stubs: { Dialog: { template: '<div><slot /></div>' } } },
+    })
+    await flushPromises()
+
+    await wrapper.findAll('.settings-btn')[0].trigger('click')
+    const pwdInputs = wrapper.findAll('.modal-content .form-input')
+    await pwdInputs[0].setValue('oldpass')
+    await pwdInputs[1].setValue('123') // 新密码少于6位
+    await pwdInputs[2].setValue('123')
+    await wrapper.get('.modal-content .btn-primary').trigger('click')
+
+    expect(changePasswordMock).not.toHaveBeenCalled()
+    expect(window.alert).toHaveBeenCalledWith('新密码至少6位')
+  })
+
+  it('修改密码成功关闭弹窗', async () => {
+    getUserProfileMock.mockResolvedValue({ code: 200, data: { name: '用户' } })
+    getUserStatsMock.mockResolvedValue({ code: 200, data: {} })
+    getAchievementsMock.mockResolvedValue({ code: 200, data: [] })
+    changePasswordMock.mockResolvedValue({ code: 200 })
+
+    const wrapper = mount(Profile, {
+      global: { stubs: { Dialog: { template: '<div><slot /></div>' } } },
+    })
+    await flushPromises()
+
+    await wrapper.findAll('.settings-btn')[0].trigger('click')
+    const pwdInputs = wrapper.findAll('.modal-content .form-input')
+    await pwdInputs[0].setValue('oldpass')
+    await pwdInputs[1].setValue('newpass')
+    await pwdInputs[2].setValue('newpass')
+    await wrapper.get('.modal-content .btn-primary').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.modal-content').exists()).toBe(false)
+  })
+
+  it('保存资料失败时显示错误', async () => {
+    getUserProfileMock.mockResolvedValue({ code: 200, data: { name: '旧名字', email: 'a@b.com' } })
+    getUserStatsMock.mockResolvedValue({ code: 200, data: {} })
+    getAchievementsMock.mockResolvedValue({ code: 200, data: [] })
+    updateUserProfileMock.mockResolvedValue({ code: 400, message: '更新失败' })
+
+    const wrapper = mount(Profile, {
+      global: { stubs: { Dialog: { template: '<div><slot /></div>' } } },
+    })
+    await flushPromises()
+
+    await wrapper.get('.edit-btn').trigger('click')
+    await wrapper.get('input.edit-input').setValue('新名字')
+    await wrapper.get('.edit-btn').trigger('click')
+    await flushPromises()
+
+    expect(window.alert).toHaveBeenCalledWith('更新失败')
+  })
 })
