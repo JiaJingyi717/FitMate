@@ -6,6 +6,7 @@ os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["JWT_SECRET_KEY"] = "test-jwt-secret"
 os.environ["SECRET_KEY"] = "test-secret"
 os.environ["FITMATE_SKIP_MIGRATIONS"] = "1"
+os.environ["FITMATE_PASSWORD_RESET_CODE"] = "123456"
 
 from app import create_app
 from utils.extensions import db

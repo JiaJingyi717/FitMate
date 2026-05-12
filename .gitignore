@@ -1,16 +1,11 @@
-# ===== 前端依赖 =====
 node_modules/
 .npm-cache/
 __pycache__/
 .ruff_cache/
 *.pyc
-
-# ===== 环境变量 =====
 .env
-
-# ===== 编辑器 =====
-.vscode/
-
-# ===== 系统文件 =====
+**/.env
+!.env.example
+!**/.env.example
+.vscode
 .DS_Store
-Thumbs.db
