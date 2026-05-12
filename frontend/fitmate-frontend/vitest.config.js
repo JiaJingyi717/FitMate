@@ -45,9 +45,8 @@ export default defineConfig({
       },
     },
     isolate: false,
-    pool: 'threads',
+    pool: 'forks',
     maxWorkers: 1,
-    minWorkers: 1,
     fileParallelism: false,
     coverage: {
       provider: 'v8',

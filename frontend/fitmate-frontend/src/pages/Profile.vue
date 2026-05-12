@@ -509,7 +509,7 @@ async function loadUserProfile() {
       userInfo.value = { ...userInfo.value, ...res.data }
       editForm.value = { ...res.data }
     }
-  } catch (error) {
+  } catch {
     logger.error('Profile', '获取用户资料失败')
   } finally {
     loading.value = false
@@ -526,7 +526,7 @@ async function loadUserStats() {
         value: formatStatValue(stat.key, res.data[stat.key])
       }))
     }
-  } catch (error) {
+  } catch {
     logger.error('Profile', '获取用户统计失败')
   }
 }
@@ -557,7 +557,7 @@ async function loadAchievements() {
     if (res.code === 200) {
       achievements.value = res.data || []
     }
-  } catch (error) {
+  } catch {
     logger.error('Profile', '获取成就列表失败')
   }
 }
@@ -618,7 +618,7 @@ async function handleSave() {
       } else {
         alert(res.message || '保存失败')
       }
-    } catch (error) {
+    } catch {
       logger.error('Profile', '保存资料失败')
       alert('保存失败，请重试')
     } finally {
@@ -654,8 +654,8 @@ async function uploadAvatar(file) {
         userInfo.value.avatar = res.data.avatar
         alert('头像更新成功')
       }
-    } catch (error) {
-      logger.error('Profile', '头像上传失败')
+  } catch {
+    logger.error('Profile', '头像上传失败')
       alert('头像上传失败')
     }
   }
@@ -693,7 +693,7 @@ async function handleChangePassword() {
     } else {
       alert(res.message || '密码修改失败')
     }
-  } catch (error) {
+  } catch {
     logger.error('Profile', '修改密码失败')
     alert('修改密码失败，请重试')
   }
@@ -712,7 +712,7 @@ async function confirmDeleteAccount() {
     } else {
       alert(res.message || '注销失败')
     }
-  } catch (error) {
+  } catch {
     logger.error('Profile', '注销账号失败')
     alert('注销失败，请重试')
   }

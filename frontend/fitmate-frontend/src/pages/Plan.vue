@@ -649,7 +649,7 @@ async function loadOverview() {
         planCount: res.data.planCount || 0
       }
     }
-  } catch (error) {
+  } catch {
     logger.error('Plan', '加载概览失败')
   }
 }
@@ -679,7 +679,7 @@ async function loadPlanList() {
               weeklySchedule: Array.isArray(p.weeklySchedule) ? p.weeklySchedule : [],
               totalCalories: Number(p.totalCalories) || 0
             }
-          } catch (mapError) {
+          } catch {
             logger.error('Plan', '解析计划数据失败')
             return null
           }
@@ -688,7 +688,7 @@ async function loadPlanList() {
         plans.value = []
       }
     }
-  } catch (error) {
+  } catch {
     logger.error('Plan', '加载计划列表失败')
     showError('加载计划失败，请刷新重试')
   } finally {
@@ -708,7 +708,7 @@ async function loadTodayTasks() {
       // 更新今日任务总数
       overviewStats.value.totalTasks = todayTasks.value.length
     }
-  } catch (error) {
+  } catch {
     logger.error('Plan', '加载今日任务失败')
   }
 }
@@ -858,7 +858,7 @@ const toggleTaskComplete = async (task) => {
 
   try {
     await completeTodayTask(task.id, { isCompleted: newCompleted })
-  } catch (error) {
+  } catch {
     logger.error('Plan', '更新任务状态失败')
     // 回滚UI
     task.isCompleted = currentCompleted
@@ -910,7 +910,7 @@ const deletePlan = async (planId) => {
     deletePlan.executing.delete(planId)
     try {
       await loadTodayTasks()
-    } catch (e) {
+    } catch {
       logger.warn('Plan', '刷新今日任务失败')
     }
     return
@@ -927,10 +927,10 @@ const deletePlan = async (planId) => {
     // 删除成功，尝试刷新数据
     try {
       await Promise.all([loadPlanList(), loadOverview(), loadTodayTasks()])
-    } catch (refreshError) {
+    } catch {
       logger.warn('Plan', '刷新数据失败（但删除可能已成功）')
     }
-  } catch (error) {
+  } catch {
     logger.error('Plan', '删除计划失败')
     // 回滚 UI
     plans.value.unshift(planToRemove)
@@ -959,7 +959,7 @@ const openPlanDetail = async (plan) => {
       selectedPlan.value = res.data
       showPlanDetail.value = true
     }
-  } catch (error) {
+  } catch {
     console.warn('Plan', '获取计划详情失败')
     showError('加载计划详情失败')
   } finally {

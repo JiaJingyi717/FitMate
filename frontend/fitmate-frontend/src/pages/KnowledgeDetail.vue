@@ -278,7 +278,7 @@ async function submitComment() {
       newComment.value = ''
       alert('评论成功')
     }
-  } catch (error) {
+  } catch {
     console.warn('评论失败')
     alert('评论失败')
   }
@@ -301,7 +301,7 @@ async function loadArticleDetail() {
       // 加载评论
       await loadComments()
     }
-  } catch (error) {
+  } catch {
     console.warn('加载文章详情失败')
   } finally {
     loading.value = false
@@ -323,7 +323,7 @@ async function loadComments() {
         commentsTotal.value = res.data.total || 0
       }
     }
-  } catch (error) {
+  } catch {
     console.warn('加载评论失败')
   }
 }
