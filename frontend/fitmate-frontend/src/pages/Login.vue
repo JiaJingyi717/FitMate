@@ -204,6 +204,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { login, register } from '../api/auth'
+import logger from '../utils/logger'
 
 const router = useRouter()
 const activeTab = ref('login')
@@ -281,16 +282,15 @@ async function handleLogin() {
         localStorage.setItem('userId', res.data.userId)
       }
 
-      // 注册成功后跳转
+      // 登录成功后跳转
       router.push('/home')
     } else {
       showError(res.message || '登录失败')
     }
   } catch (error) {
     // 错误已由 request 拦截器处理，这里显示友好提示
-    const msg = error.response?.data?.message || error.message || '登录失败，请检查邮箱和密码'
-    showError(msg)
-    console.error('登录失败：', error)
+    showError(error.message || '登录失败，请检查邮箱和密码')
+    logger.warn('Login', '登录失败')
   } finally {
     loading.value = false
   }
@@ -346,9 +346,8 @@ async function handleRegister() {
       showError(res.message || '注册失败')
     }
   } catch (error) {
-    const msg = error.response?.data?.message || error.message || '注册失败，请稍后重试'
-    showError(msg)
-    console.error('注册失败：', error)
+    showError(error.message || '注册失败，请稍后重试')
+    logger.warn('Login', '注册失败')
   } finally {
     loading.value = false
   }
