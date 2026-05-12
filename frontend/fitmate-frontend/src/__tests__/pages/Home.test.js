@@ -92,4 +92,48 @@ describe('Home.vue', () => {
 
     expect(wrapper.text()).toContain('我是你的AI健身教练')
   })
+
+  it('用户消息正确添加到消息列表', async () => {
+    askCoachMock.mockResolvedValue({ code: 200, data: { content: 'AI回复' } })
+
+    const wrapper = mount(Home)
+    await wrapper.find('.chat-input').setValue('你好')
+    await wrapper.find('.send-btn').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('你好')
+  })
+
+  it('AI回复正确显示在消息列表', async () => {
+    askCoachMock.mockResolvedValue({ code: 200, data: { content: '减脂建议：控制饮食' } })
+
+    const wrapper = mount(Home)
+    await wrapper.find('.chat-input').setValue('如何减脂')
+    await wrapper.find('.send-btn').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('减脂建议：控制饮食')
+  })
+
+  it('发送空消息时不调用API', async () => {
+    const wrapper = mount(Home)
+    await wrapper.find('.send-btn').trigger('click')
+
+    expect(askCoachMock).not.toHaveBeenCalled()
+  })
+
+  it('取消重置会话时保持当前对话', async () => {
+    askCoachMock.mockResolvedValue({ code: 200, data: { content: '继续对话' } })
+    window.confirm = vi.fn(() => false)
+
+    const wrapper = mount(Home)
+    await wrapper.find('.chat-input').setValue('测试')
+    await wrapper.find('.send-btn').trigger('click')
+    await flushPromises()
+
+    await wrapper.find('.reset-btn').trigger('click')
+
+    expect(wrapper.text()).toContain('测试')
+    expect(wrapper.text()).toContain('继续对话')
+  })
 })

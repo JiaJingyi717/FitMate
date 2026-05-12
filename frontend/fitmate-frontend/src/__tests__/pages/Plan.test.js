@@ -165,4 +165,180 @@ describe('Plan.vue', () => {
     expect(planApiMock.deletePlan).toHaveBeenCalledWith(12)
     expect(planApiMock.getPlanList).toHaveBeenCalled()
   })
+
+  it('点击计划卡片会打开详情弹窗', async () => {
+    planApiMock.getPlanList.mockResolvedValue({
+      code: 200,
+      data: [
+        {
+          id: 20,
+          name: '计划A',
+          description: 'desc',
+          type: '手动创建',
+          difficulty: '中级',
+          duration: '4周',
+          tasks: [],
+          totalTasks: 0,
+          completedTasks: 0,
+          totalCalories: 0,
+        },
+      ],
+    })
+    planApiMock.getPlanDetail.mockResolvedValue({
+      code: 200,
+      data: { id: 20, name: '计划A', tasks: [] },
+    })
+
+    const wrapper = mount(Plan)
+    await flushPromises()
+
+    await wrapper.find('.plan-card').trigger('click')
+    await flushPromises()
+
+    expect(planApiMock.getPlanDetail).toHaveBeenCalled()
+  })
+
+  it('AI生成失败时显示错误提示', async () => {
+    generatePlanMock.mockRejectedValue(new Error('生成失败'))
+    planApiMock.getTodayTasks.mockResolvedValue({ code: 200, data: [] })
+
+    const wrapper = mount(Plan)
+    await flushPromises()
+
+    await wrapper.find('.header-actions .btn-primary').trigger('click')
+    const goalBtns = wrapper.findAll('.goal-btn')
+    const levelBtns = wrapper.findAll('.level-btn')
+    const dayBtns = wrapper.findAll('.day-btn')
+    await goalBtns[0].trigger('click')
+    await levelBtns[0].trigger('click')
+    await dayBtns[0].trigger('click')
+
+    const generateBtn = wrapper.find('.dialog .btn-primary')
+    await generateBtn.trigger('click')
+    await flushPromises()
+
+    expect(generatePlanMock).toHaveBeenCalled()
+  })
+
+  it('手动创建计划失败时显示错误提示', async () => {
+    planApiMock.createPlan.mockRejectedValue(new Error('创建失败'))
+
+    const wrapper = mount(Plan)
+    await flushPromises()
+
+    await wrapper.find('.header-actions .btn-secondary').trigger('click')
+    await wrapper.find('.dialog-lg .exercise-btn').trigger('click')
+
+    const inputs = wrapper.findAll('.dialog-lg .form-input')
+    await inputs[0].setValue('计划名称')
+    await inputs[3].setValue('2026-04-01')
+    await inputs[4].setValue('2026-04-30')
+
+    await wrapper.find('.dialog-lg .btn-primary').trigger('click')
+    await flushPromises()
+
+    expect(planApiMock.createPlan).toHaveBeenCalled()
+  })
+
+  it('手动创建计划时提示必须添加任务', async () => {
+    const wrapper = mount(Plan)
+    await flushPromises()
+
+    await wrapper.find('.header-actions .btn-secondary').trigger('click')
+
+    const inputs = wrapper.findAll('.dialog-lg .form-input')
+    await inputs[0].setValue('无任务计划')
+
+    await wrapper.find('.dialog-lg .btn-primary').trigger('click')
+
+    expect(planApiMock.createPlan).not.toHaveBeenCalled()
+  })
+
+  it('切换到今日任务时刷新任务列表', async () => {
+    planApiMock.getTodayTasks
+      .mockResolvedValueOnce({ code: 200, data: [] })
+      .mockResolvedValueOnce({
+        code: 200,
+        data: [{ id: 5, name: '训练A', isCompleted: true }],
+      })
+
+    const wrapper = mount(Plan)
+    await flushPromises()
+
+    const tabs = wrapper.findAll('.tab-btn')
+    await tabs[1].trigger('click')
+    await flushPromises()
+
+    expect(planApiMock.getTodayTasks).toHaveBeenCalledTimes(2)
+  })
+
+  it('点击已完成任务会标记为未完成', async () => {
+    planApiMock.getTodayTasks.mockResolvedValue({
+      code: 200,
+      data: [{ id: 7, name: '已完成任务', isCompleted: true, calories: 50 }],
+    })
+    planApiMock.completeTodayTask.mockResolvedValue({ code: 200 })
+
+    const wrapper = mount(Plan)
+    await flushPromises()
+
+    await wrapper.findAll('.tab-btn')[1].trigger('click')
+    await flushPromises()
+
+    await wrapper.find('.task-checkbox').trigger('click')
+    await flushPromises()
+
+    expect(planApiMock.completeTodayTask).toHaveBeenCalledWith(7, { isCompleted: false })
+  })
+
+  it('删除AI本地计划不需要调用后端API', async () => {
+    planApiMock.getPlanList.mockResolvedValue({
+      code: 200,
+      data: [
+        {
+          id: 'ai-local-123',
+          name: 'AI本地计划',
+          description: 'desc',
+          type: 'AI生成',
+          difficulty: '初级',
+          tasks: [],
+        },
+      ],
+    })
+    planApiMock.getTodayTasks.mockResolvedValue({ code: 200, data: [] })
+
+    const wrapper = mount(Plan)
+    await flushPromises()
+
+    await wrapper.find('.delete-btn').trigger('click')
+    await flushPromises()
+
+    expect(planApiMock.deletePlan).not.toHaveBeenCalled()
+    expect(planApiMock.getPlanList).toHaveBeenCalled()
+  })
+
+  it('取消删除计划时不调用API', async () => {
+    planApiMock.getPlanList.mockResolvedValue({
+      code: 200,
+      data: [
+        {
+          id: 50,
+          name: '计划B',
+          description: 'desc',
+          type: '手动创建',
+          difficulty: '中级',
+          tasks: [],
+        },
+      ],
+    })
+    window.confirm = vi.fn(() => false)
+
+    const wrapper = mount(Plan)
+    await flushPromises()
+
+    await wrapper.find('.delete-btn').trigger('click')
+    await flushPromises()
+
+    expect(planApiMock.deletePlan).not.toHaveBeenCalled()
+  })
 })
