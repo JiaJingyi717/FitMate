@@ -179,26 +179,39 @@ const newComment = ref('')
 const relatedArticles = ref([])
 const commentsTotal = ref(0)
 
-// 计算属性
+// HTML 实体转义函数 - 防止 XSS 攻击
+function escapeHtml(text) {
+  if (!text) return ''
+  const map = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  }
+  return String(text).replace(/[&<>"']/g, m => map[m])
+}
+
+// 计算属性 - 安全渲染内容
 const renderedContent = computed(() => {
   if (!article.content) return ''
   return article.content
     .split('\n')
     .map(line => {
       if (line.startsWith('# ')) {
-        return `<h1 class="content-h1">${line.slice(2)}</h1>`
+        return `<h1 class="content-h1">${escapeHtml(line.slice(2))}</h1>`
       } else if (line.startsWith('## ')) {
-        return `<h2 class="content-h2">${line.slice(3)}</h2>`
+        return `<h2 class="content-h2">${escapeHtml(line.slice(3))}</h2>`
       } else if (line.startsWith('### ')) {
-        return `<h3 class="content-h3">${line.slice(4)}</h3>`
+        return `<h3 class="content-h3">${escapeHtml(line.slice(4))}</h3>`
       } else if (line.startsWith('- ')) {
-        return `<li class="content-li">${line.slice(2)}</li>`
+        return `<li class="content-li">${escapeHtml(line.slice(2))}</li>`
       } else if (line.startsWith('**') && line.endsWith('**')) {
-        return `<p class="content-bold">${line.slice(2, -2)}</p>`
+        return `<p class="content-bold"><strong>${escapeHtml(line.slice(2, -2))}</strong></p>`
       } else if (line.trim() === '') {
         return ''
       } else {
-        return `<p class="content-p">${line}</p>`
+        return `<p class="content-p">${escapeHtml(line)}</p>`
       }
     })
     .join('')
@@ -228,7 +241,7 @@ async function handleLike() {
       article.likes = res.data.likeCount
     }
   } catch (error) {
-    console.error('点赞失败:', error)
+    console.warn('点赞失败:', error.message)
   }
 }
 
@@ -239,7 +252,7 @@ async function handleCollect() {
       isCollected.value = res.data.isCollected
     }
   } catch (error) {
-    console.error('收藏失败:', error)
+    console.warn('收藏失败:', error.message)
   }
 }
 
@@ -266,7 +279,7 @@ async function submitComment() {
       alert('评论成功')
     }
   } catch (error) {
-    console.error('评论失败:', error)
+    console.warn('评论失败')
     alert('评论失败')
   }
 }
@@ -289,7 +302,7 @@ async function loadArticleDetail() {
       await loadComments()
     }
   } catch (error) {
-    console.error('加载文章详情失败:', error)
+    console.warn('加载文章详情失败')
   } finally {
     loading.value = false
   }
@@ -311,7 +324,7 @@ async function loadComments() {
       }
     }
   } catch (error) {
-    console.error('加载评论失败:', error)
+    console.warn('加载评论失败')
   }
 }
 
