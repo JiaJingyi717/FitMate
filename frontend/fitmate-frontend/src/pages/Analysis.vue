@@ -377,7 +377,7 @@ const loadData = async () => {
     // 获取 AI 进度分析
     await loadAIAnalysis(range)
 
-  } catch (error) {
+  } catch {
     logger.error('Analysis', '加载分析数据失败')
   } finally {
     loading.value = false
@@ -405,7 +405,7 @@ const loadAIAnalysis = async (range) => {
     if (res.code === 200 && res.data && res.data.analysis) {
       aiAnalysis.value = res.data.analysis
     }
-  } catch (error) {
+  } catch {
     logger.error('Analysis', '加载AI分析失败')
     // 降级：使用默认数据
     aiAnalysis.value = {
