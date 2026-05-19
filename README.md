@@ -59,3 +59,45 @@ FitMate — AI 智能健身助手
 - 前端覆盖率报告文件：`frontend/fitmate-frontend/coverage/lcov.info`
 
 > 说明：CI 与 Codecov 徽章在 `main` 分支成功运行后由 GitHub Actions 自动更新。
+
+## 六、Docker 部署
+
+1. 复制根目录 `.env.example` 为 `.env`，填写 `MYSQL_ROOT_PASSWORD`、`QWEN_API_KEY` 等（勿提交 `.env`）。
+2. **开发环境**（Vite 热重载 + Flask + MySQL）：
+
+```bash
+docker compose up -d --build
+docker compose ps
+```
+
+若曾用旧版 `docker-compose.yml`（服务名 `app`），请先清理再启动：
+
+```bat
+docker compose down --remove-orphans
+docker stop fitmate-app 2>nul
+docker rm fitmate-app 2>nul
+docker compose up -d --build
+```
+
+- 前端：<http://localhost:5173>
+- 后端 API：<http://localhost:5000/health>
+- MySQL 端口映射：`3307`
+
+3. **生产环境**（Nginx + Gunicorn）：
+
+```bash
+cp secrets/db_password.txt.example secrets/db_password.txt
+# 编辑 .env 与 secrets/db_password.txt，使数据库密码一致
+./deploy.sh
+```
+
+Windows 下生产部署请用：
+
+```bat
+copy secrets\db_password.txt.example secrets\db_password.txt
+deploy.bat
+```
+
+- 浏览器访问：<http://localhost:80>（或 `.env` 中 `HTTP_PORT`）
+
+4. 镜像构建与推送：`.github/workflows/docker.yml`（推送到 GHCR）。
