@@ -1,6 +1,16 @@
 node_modules
 dist
 .git
+.gitignore
 *.md
 .env
 .env.*
+!.env.example
+.npm-cache
+coverage
+htmlcov
+.cursor
+**/__tests__
+**/*.test.js
+vitest.config.js
+scripts/run-vitest.mjs

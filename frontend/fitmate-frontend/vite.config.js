@@ -12,7 +12,7 @@ export default defineConfig({
     host: '0.0.0.0',
     proxy: {
       '/api': {
-        target: process.env.VITE_API_BASE_URL || 'http://app:5000',
+        target: process.env.VITE_API_BASE_URL || 'http://backend:5000',
         changeOrigin: true,
       },
     },
