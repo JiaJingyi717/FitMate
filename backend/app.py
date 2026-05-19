@@ -43,6 +43,11 @@ def create_app():
     def health():
         return ok({"status": "up"})
 
+    @app.get("/health")
+    def health_probe():
+        """Docker / 负载均衡健康检查（与 /api/health 一致）。"""
+        return ok({"status": "up"})
+
     # 用户认证
     app.register_blueprint(auth_bp, url_prefix="/api")
     # 个人中心
