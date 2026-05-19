@@ -1,6 +1,18 @@
 // src/api/request.js
 import axios from 'axios'
 
+/** 仅浏览器环境跳转登录；Vitest/jsdom 中不调度定时器，避免 CI 报 window is not defined */
+function scheduleLoginRedirect() {
+  if (typeof window === 'undefined' || import.meta.env.VITEST) {
+    return
+  }
+  setTimeout(() => {
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login'
+    }
+  }, 1500)
+}
+
 const service = axios.create({
   baseURL: '',
   timeout: 10000,
@@ -60,10 +72,7 @@ service.interceptors.response.use(
           localStorage.removeItem('token')
           localStorage.removeItem('tokenExpiry')
           localStorage.removeItem('userId')
-          // 延迟跳转，让用户看到错误提示
-          setTimeout(() => {
-            window.location.href = '/login'
-          }, 1500)
+          scheduleLoginRedirect()
           break
         case 403:
           message = '无访问权限'
