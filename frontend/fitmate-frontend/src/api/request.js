@@ -1,5 +1,6 @@
 // src/api/request.js
 import axios from 'axios'
+import { clearCoachChatSession } from '../utils/coachChatStorage'
 
 /** 仅浏览器环境跳转登录；Vitest/jsdom 中不调度定时器，避免 CI 报 window is not defined */
 function scheduleLoginRedirect() {
@@ -65,15 +66,30 @@ service.interceptors.response.use(
         case 400:
           message = '请求参数错误'
           break
-        case 401:
-          message = '登录已过期，请重新登录'
-          // 清除 token 并跳转登录
-          sessionStorage.removeItem('token')
-          localStorage.removeItem('token')
-          localStorage.removeItem('tokenExpiry')
-          localStorage.removeItem('userId')
-          scheduleLoginRedirect()
+        case 401: {
+          const url = error.config?.url || ''
+          const isLoginRequest = url.includes('/auth/login')
+          const onLoginPage =
+            typeof window !== 'undefined' && window.location.pathname === '/login'
+          const apiMessage = error.response.data?.message
+
+          if (isLoginRequest || onLoginPage) {
+            message =
+              apiMessage === 'invalid username or password'
+                ? '账号或密码错误'
+                : apiMessage || '账号或密码错误'
+          } else {
+            message = '登录已过期，请重新登录'
+            const userId = localStorage.getItem('userId')
+            sessionStorage.removeItem('token')
+            localStorage.removeItem('token')
+            localStorage.removeItem('tokenExpiry')
+            localStorage.removeItem('userId')
+            clearCoachChatSession(userId)
+            scheduleLoginRedirect()
+          }
           break
+        }
         case 403:
           message = '无访问权限'
           break

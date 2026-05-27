@@ -15,10 +15,17 @@ vi.mock('../../api/ai', () => ({
   askCoach: (...args) => askCoachMock(...args),
 }))
 
+vi.mock('../../api/user', () => ({
+  getUserProfile: vi.fn().mockResolvedValue({ code: 200, data: {} }),
+  updateUserProfile: vi.fn().mockResolvedValue({ code: 200 }),
+}))
+
 describe('Home.vue', () => {
   beforeEach(() => {
     pushMock.mockReset()
     askCoachMock.mockReset()
+    sessionStorage.clear()
+    localStorage.clear()
     window.SpeechRecognition = undefined
     window.webkitSpeechRecognition = undefined
   })
@@ -120,6 +127,23 @@ describe('Home.vue', () => {
     await wrapper.find('.send-btn').trigger('click')
 
     expect(askCoachMock).not.toHaveBeenCalled()
+  })
+
+  it('切换页面后从 sessionStorage 恢复对话', async () => {
+    localStorage.setItem('userId', '9')
+    askCoachMock.mockResolvedValue({ code: 200, data: { content: '持久化回复' } })
+
+    const first = mount(Home)
+    await first.find('.chat-input').setValue('记住这条')
+    await first.find('.send-btn').trigger('click')
+    await flushPromises()
+    first.unmount()
+
+    const second = mount(Home)
+    await flushPromises()
+
+    expect(second.text()).toContain('记住这条')
+    expect(second.text()).toContain('持久化回复')
   })
 
   it('取消重置会话时保持当前对话', async () => {

@@ -33,6 +33,31 @@ describe('KnowledgeDetail.vue', () => {
     window.alert = vi.fn()
   })
 
+  it('视频类型文章渲染可播放的 video 标签', async () => {
+    getArticleDetailMock.mockResolvedValue({
+      code: 200,
+      data: {
+        id: 2,
+        title: '肩部训练详解',
+        type: 'video',
+        category: '力量训练',
+        description: '肩部训练要点',
+        content: '正文说明',
+        videoUrl: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
+        likes: 0,
+        relatedArticles: [],
+      },
+    })
+    getArticleCommentsMock.mockResolvedValue({ code: 200, data: [] })
+
+    const wrapper = mount(KnowledgeDetail)
+    await flushPromises()
+
+    const video = wrapper.find('video.video-element')
+    expect(video.exists()).toBe(true)
+    expect(video.attributes('src')).toContain('.mp4')
+  })
+
   it('初始化加载详情与评论', async () => {
     getArticleDetailMock.mockResolvedValue({
       code: 200,

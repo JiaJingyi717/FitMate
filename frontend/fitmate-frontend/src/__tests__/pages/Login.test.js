@@ -29,6 +29,21 @@ describe('Login.vue', () => {
     sessionStorage.clear()
   })
 
+  it('使用用户名登录时发送 username 字段', async () => {
+    loginMock.mockResolvedValue({
+      code: 200,
+      data: { token: 'token-1', userId: 1 },
+    })
+    const wrapper = mount(Login)
+    const inputs = wrapper.findAll('input.form-input')
+    await inputs[0].setValue('test')
+    await inputs[1].setValue('123456')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(loginMock).toHaveBeenCalledWith({ username: 'test', password: '123456' })
+  })
+
   it('登录成功后跳转到 /home', async () => {
     loginMock.mockResolvedValue({
       code: 200,
