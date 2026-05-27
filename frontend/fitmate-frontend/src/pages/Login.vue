@@ -41,7 +41,7 @@
         <div v-show="activeTab === 'login'" class="auth-form">
           <form @submit.prevent="handleLogin">
             <div class="form-group">
-              <label class="form-label">邮箱 / 手机号</label>
+              <label class="form-label">邮箱 / 手机号 / 用户名</label>
               <div class="input-wrapper">
                 <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
@@ -204,6 +204,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { login, register } from '../api/auth'
+import { buildLoginPayload } from '../utils/loginPayload'
 import logger from '../utils/logger'
 
 const router = useRouter()
@@ -252,12 +253,10 @@ async function handleLogin() {
   clearError()
 
   try {
-    // 判断是邮箱还是手机号
-    const identifier = loginForm.value.identifier
-    const isEmail = identifier.includes('@')
-    const loginData = isEmail
-      ? { email: identifier, password: loginForm.value.password }
-      : { phone: identifier, password: loginForm.value.password }
+    const loginData = buildLoginPayload(
+      loginForm.value.identifier,
+      loginForm.value.password
+    )
 
     const res = await login(loginData)
 
@@ -289,7 +288,7 @@ async function handleLogin() {
     }
   } catch (error) {
     // 错误已由 request 拦截器处理，这里显示友好提示
-    showError(error.message || '登录失败，请检查邮箱和密码')
+    showError(error.message || '登录失败，请检查账号和密码')
     logger.warn('Login', '登录失败')
   } finally {
     loading.value = false

@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { clearCoachChatSession } from '../utils/coachChatStorage'
 import Login from '../pages/Login.vue'
 import Register from '../pages/Register.vue'
 import Home from '../pages/Home.vue'
@@ -8,29 +9,26 @@ import KnowledgeDetail from '../pages/KnowledgeDetail.vue'
 import Analysis from '../pages/Analysis.vue'
 import Profile from '../pages/Profile.vue'
 
-// 路由鉴权守卫
-function requireAuth(to, from, next) {
+// 路由鉴权守卫（Vue Router 4：return 路径，勿使用已废弃的 next()）
+function requireAuth() {
   const token = sessionStorage.getItem('token') || localStorage.getItem('token')
   const tokenExpiry = localStorage.getItem('tokenExpiry')
 
-  // 检查 token 是否存在
   if (!token) {
-    next('/login')
-    return
+    return '/login'
   }
 
-  // 检查 token 过期时间
-  if (tokenExpiry && Date.now() > parseInt(tokenExpiry)) {
-    // token 已过期，清除并跳转登录
+  if (tokenExpiry && Date.now() > parseInt(tokenExpiry, 10)) {
+    const userId = localStorage.getItem('userId')
     sessionStorage.removeItem('token')
     localStorage.removeItem('token')
     localStorage.removeItem('tokenExpiry')
     localStorage.removeItem('userId')
-    next('/login')
-    return
+    clearCoachChatSession(userId)
+    return '/login'
   }
 
-  next()
+  return true
 }
 
 const routes = [
@@ -50,13 +48,11 @@ const router = createRouter({
   routes
 })
 
-// 全局路由守卫
-router.beforeEach((to, from, next) => {
+router.beforeEach((to) => {
   if (to.meta.requiresAuth) {
-    requireAuth(to, from, next)
-  } else {
-    next()
+    return requireAuth()
   }
+  return true
 })
 
 export default router

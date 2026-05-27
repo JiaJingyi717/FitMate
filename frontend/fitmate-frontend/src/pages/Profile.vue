@@ -436,6 +436,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { getUserProfile, updateUserProfile, updateAvatar, getUserStats, getAchievements, changePassword, deleteAccount } from '../api/user.js'
 import Dialog from '../components/Dialog.vue'
+import { clearCoachChatSession } from '../utils/coachChatStorage'
 import logger from '../utils/logger'
 
 const router = useRouter()
@@ -724,7 +725,12 @@ async function handleLogout() {
     return
   }
 
+  const userId = localStorage.getItem('userId')
+  sessionStorage.removeItem('token')
   localStorage.removeItem('token')
+  localStorage.removeItem('tokenExpiry')
+  localStorage.removeItem('userId')
+  clearCoachChatSession(userId)
   router.push('/login')
 }
 
