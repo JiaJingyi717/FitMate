@@ -107,7 +107,16 @@ def test_fitness_coach_context_build(monkeypatch):
     monkeypatch.setattr(c, "chat", fake_chat)
     out = c.fitness_coach(
         [{"role": "user", "content": "我想增肌"}],
-        {"fitness_level": "有基础", "current_plan": "A", "recent_goals": "卧推", "injuries": "无"},
+        {
+            "name": "李明",
+            "fitness_level": "有基础",
+            "current_plan": "A",
+            "recent_goals": "卧推",
+            "injuries": "无",
+            "coach_personality": "温柔鼓励型",
+        },
     )
     assert out["content"] == "建议"
     assert len(captured["messages"]) >= 3
+    assert "李明" in captured["messages"][1]["content"]
+    assert "温柔鼓励型" in captured["messages"][0]["content"]

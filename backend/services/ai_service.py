@@ -283,22 +283,23 @@ class QwenAIClient:
 
         Args:
             messages: 对话历史，格式为 [{"role": "user/assistant", "content": "..."}]
-            user_context: 用户上下文信息（可选），包含：
-                - fitness_level: 健身水平
-                - current_plan: 当前训练计划
-                - recent_goals: 近期目标
-                - injuries: 伤病情况
+            user_context: 用户画像（由 coach_context_service 从个人资料与训练数据组装）
 
         Returns:
             AI 回复
         """
-        system_prompt = """你是一位专业、热情、耐心的健身教练 AI。
+        personality_style = ""
+        if user_context and user_context.get("coach_personality"):
+            personality_style = f"\n请采用【{user_context['coach_personality']}】的沟通风格。"
+
+        system_prompt = f"""你是一位专业、热情、耐心的健身教练 AI。{personality_style}
 
 你的特点：
 1. 专业：提供科学、准确的健身知识
 2. 鼓励：总是鼓励用户，保持积极态度
 3. 耐心：详细解答各种健身问题
 4. 实用：给出的建议要切实可行
+5. 个性化：结合下方用户背景作答；有姓名时可用合适称呼，勿编造用户未提供的身体情况
 
 你擅长：
 - 训练动作指导（姿势、发力技巧）
@@ -311,18 +312,7 @@ class QwenAIClient:
 
 如果用户询问的内容涉及医疗建议（如伤病康复），请提醒他们咨询专业医生。"""
 
-        # 添加用户上下文
-        context_text = ""
-        if user_context:
-            context_text = "\n\n【用户背景】（供参考）\n"
-            if user_context.get('fitness_level'):
-                context_text += f"- 健身水平：{user_context['fitness_level']}\n"
-            if user_context.get('current_plan'):
-                context_text += f"- 当前计划：{user_context['current_plan']}\n"
-            if user_context.get('recent_goals'):
-                context_text += f"- 近期目标：{user_context['recent_goals']}\n"
-            if user_context.get('injuries'):
-                context_text += f"- 伤病情况：{user_context['injuries']}\n"
+        context_text = self._format_coach_user_context(user_context)
 
         # 构建消息列表
         full_messages = [{"role": "system", "content": system_prompt}]
@@ -343,6 +333,36 @@ class QwenAIClient:
             "content": result["content"],
             "usage": result.get("usage", {}),
         }
+
+    @staticmethod
+    def _format_coach_user_context(user_context: Dict[str, Any] | None) -> str:
+        if not user_context:
+            return ""
+
+        lines = [
+            "\n\n【用户背景】请据此个性化回答；只引用与当前问题相关的信息，不要机械罗列全部条目。"
+        ]
+        field_labels = [
+            ("name", "称呼"),
+            ("gender", "性别"),
+            ("age", "年龄"),
+            ("height", "身高(cm)"),
+            ("weight", "体重(kg)"),
+            ("bmi", "BMI"),
+            ("location", "所在地"),
+            ("coach_gender", "教练形象"),
+            ("coach_personality", "教练风格"),
+            ("fitness_level", "健身水平"),
+            ("recent_goals", "健身目标"),
+            ("current_plan", "当前训练计划"),
+            ("recent_training", "近期训练概况"),
+            ("injuries", "伤病/身体限制"),
+        ]
+        for key, label in field_labels:
+            value = user_context.get(key)
+            if value is not None and value != "":
+                lines.append(f"- {label}：{value}")
+        return "\n".join(lines) + "\n" if len(lines) > 1 else ""
 
     def progress_analysis(self, progress_data: Dict[str, Any]) -> Dict[str, Any]:
         """

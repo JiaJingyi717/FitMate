@@ -106,16 +106,24 @@ def test_coach_chat_validation_and_success(client, auth_headers, monkeypatch):
     resp = client.post("/api/ai/coach/chat", json={"messages": []}, headers=auth_headers)
     assert resp.status_code == 400
 
-    fake_client = SimpleNamespace(fitness_coach=lambda msgs, ctx: {"content": "保持节奏", "usage": {"t": 1}})
+    captured = {}
+
+    def fake_fitness_coach(msgs, ctx):
+        captured["context"] = ctx
+        return {"content": "保持节奏", "usage": {"t": 1}}
+
+    fake_client = SimpleNamespace(fitness_coach=fake_fitness_coach)
     monkeypatch.setattr("routes.ai_routes.get_ai_client", lambda: fake_client)
     ok_resp = client.post(
         "/api/ai/coach/chat",
-        json={"messages": [{"role": "user", "content": "你好"}], "context": {"fitness_level": "有基础"}},
+        json={"messages": [{"role": "user", "content": "你好"}], "context": {"coach_personality": "gentle"}},
         headers=auth_headers,
     )
     data = ok_resp.get_json()
     assert ok_resp.status_code == 200
     assert data["data"]["content"] == "保持节奏"
+    assert "fitness_level" in captured["context"]
+    assert captured["context"].get("coach_personality") == "温柔鼓励型"
 
 
 def test_progress_analysis_success(client, auth_headers, monkeypatch):

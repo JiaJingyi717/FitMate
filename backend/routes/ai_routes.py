@@ -6,6 +6,7 @@ AI 智能功能路由
 from flask import Blueprint, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from services.ai_service import get_ai_client
+from services.coach_context_service import build_coach_user_context
 from routes._shared import ok, fail
 
 ai_bp = Blueprint("ai", __name__)
@@ -170,8 +171,9 @@ def fitness_coach_chat():
         if not messages:
             return fail("消息列表不能为空", 400)
 
-        # 获取用户上下文
-        context = data.get("context", {})
+        user_id = int(get_jwt_identity())
+        request_context = data.get("context") or {}
+        context = build_coach_user_context(user_id, request_context)
 
         ai_client = get_ai_client()
         result = ai_client.fitness_coach(messages, context)

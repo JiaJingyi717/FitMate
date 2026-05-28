@@ -43,6 +43,8 @@ def get_profile():
         "joinDate": join_date,
         "goal": user.goal,
         "currentCoachId": user.current_coach_id,
+        "coachGender": user.coach_gender or "",
+        "coachPersonality": user.coach_personality or "",
     })
 
 

@@ -80,6 +80,19 @@ docker compose up -d --build
 ```
 
 - 前端：<http://localhost:5173>
+- 开发测试账号（`docker compose down -v` 重建库后由种子数据创建）：用户名 `test` / 密码 `123456`；也可用邮箱 `test@example.com` 或手机号 `13800138000` 登录。
+- **AI 教练个性化**：登录后后端会根据「个人中心」资料（姓名、性别、身高体重、目标等）、进行中的训练计划与近 30 天训练统计自动注入对话上下文；AI 教练页的教练性别/性格会写入个人资料并参与回复风格。
+- **AI 教练对话记录**：本次浏览器会话内（`sessionStorage`）自动保存聊天记录，切换训练计划/知识库等页面再返回不会清空；点「新对话」或退出登录会清除。
+
+### 知识库视频播放
+
+- 详情页 `article_type=video` 且 `video_url` 有值时，使用 HTML5 `<video>` 或 iframe（B 站 / YouTube）真实播放。
+- **演示视频（B 站）**：
+  - 跑步减脂完全攻略：[BV1DV411Y7rW](https://www.bilibili.com/video/BV1DV411Y7rW/)
+  - HIIT高效燃脂训练（帕梅拉 10 分钟 HIIT）：[BV1Np4y1i7rG](https://www.bilibili.com/video/BV1Np4y1i7rG/)
+  - 肩部训练详解：[BV1F1421t7fa](https://www.bilibili.com/video/BV1F1421t7fa/)
+- 后端每次启动会同步上述链接到数据库；修改链接请编辑 `backend/data/seed_data.py` 中的 `DEMO_VIDEO_URLS`。
+- **自有 MP4**：将文件放到 `frontend/fitmate-frontend/public/videos/`，`video_url` 填 `/videos/文件名.mp4`。
 - 后端 API：<http://localhost:5000/health>
 - MySQL 端口映射：`3307`
 
@@ -101,3 +114,23 @@ deploy.bat
 - 浏览器访问：<http://localhost:80>（或 `.env` 中 `HTTP_PORT`）
 
 4. 镜像构建与推送：`.github/workflows/docker.yml`（推送到 GHCR）。
+
+## 七、云服务部署（课程作业）
+
+完整步骤见 **[docs/deployment.md](docs/deployment.md)**（推荐腾讯云/阿里云 + `./deploy.sh`）。
+
+作业提交还需：`docs/contributions/12-cloud/你的名字.md`、部署成功与环境变量截图、可访问的线上链接。
+
+**登录报 500 / `Access denied for user 'root'`**：多为 MySQL 数据卷里的 root 密码与 `.env` 里 `MYSQL_ROOT_PASSWORD` 不一致。开发环境默认密码为 **`123456`**（与旧版 compose 一致）。在根目录 `.env` 中设置 `MYSQL_ROOT_PASSWORD=123456` 后执行 `docker compose up -d --force-recreate backend`。若仍失败且可清空数据：`docker compose down -v` 后重新 `up`。
+
+**拉取 `python:3.12-slim` 失败**（`short read` / `unexpected EOF` / `content descriptor ... not found`）：多为直连 Docker Hub 不稳定或本地缓存损坏。可先清理构建缓存 `docker buildx prune -f`，再通过国内镜像拉取并打标签：
+
+```bat
+docker pull docker.m.daocloud.io/library/python:3.12-slim
+docker tag docker.m.daocloud.io/library/python:3.12-slim python:3.12-slim
+docker compose build backend
+```
+
+本地已有 `fitmate-backend` 镜像时，日常启动用 `docker compose up -d` 即可，不必每次 `--build`。
+
+**backend 一直 unhealthy / `Table 'fitmate.articles' doesn't exist`**：多为 MySQL 数据卷里只有部分表（初始化脚本未跑完或旧数据）。后端启动时会自动 `create_all` 补全表；若仍异常可 `docker compose restart backend`。需要完全重置库：`docker compose down -v` 后重新 `up`（会清空用户数据）。
