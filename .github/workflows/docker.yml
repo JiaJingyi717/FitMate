@@ -21,6 +21,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       # GHCR 镜像名必须全小写，FitMate 等大写仓库名会导致 push 秒失败
       - name: Set GHCR image prefix (lowercase)
         id: image
@@ -59,6 +62,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Set GHCR image prefix (lowercase)
         id: image
