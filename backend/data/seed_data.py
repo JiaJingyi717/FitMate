@@ -4,6 +4,7 @@ from models.user import User
 from models.article import Article
 from models.coach import Coach
 from models.achievement import Achievement
+from data.article_contents import ARTICLE_CONTENTS
 from services.user_service import register_user
 from utils.extensions import db
 
@@ -20,78 +21,84 @@ def seed_test_user():
     )
 
 
+def _article_fields(title: str, category: str, article_type: str, thumbnail: str, **kwargs):
+    """从 ARTICLE_CONTENTS 取详细正文，缺省则用传入的 summary/content。"""
+    detail = ARTICLE_CONTENTS.get(title, {})
+    return {
+        "title": title,
+        "category": category,
+        "article_type": article_type,
+        "summary": kwargs.get("summary") or detail.get("summary", ""),
+        "thumbnail": thumbnail,
+        "content": kwargs.get("content") or detail.get("content", ""),
+        "video_url": kwargs.get("video_url", ""),
+        "duration": kwargs.get("duration", ""),
+        "views": kwargs.get("views", 0),
+        "author": kwargs.get("author", "官方"),
+        "publish_date": kwargs.get("publish_date"),
+        "tags": kwargs.get("tags", ""),
+    }
+
+
 def seed_articles():
     if Article.query.count() > 0:
         return
     today = date.today()
-    samples = [
-        Article(
-            title="深蹲入门指南", category="力量训练", article_type="article",
-            summary="深蹲是健身中最基础也是最有效的动作之一。",
-            thumbnail="🏋️", content="深蹲是健身中最基础也是最有效的动作之一。保持背部挺直，膝盖朝向脚尖方向，核心收紧。\n\n## 深蹲要点\n1. 双脚与肩同宽或略宽\n2. 臀部向后坐，重心放在脚后跟\n3. 膝盖不超过脚尖太多\n4. 起身时腿部发力，呼气\n\n坚持每天练习，你会看到明显的进步！",
-            video_url="", duration="8:30", views=15234,
-            author="官方", publish_date=today - timedelta(days=5),
+    specs = [
+        ("深蹲入门指南", "力量训练", "article", "🏋️", dict(
+            duration="8:30", views=15234, publish_date=today - timedelta(days=5),
             tags="深蹲,力量训练,腿部",
-        ),
-        Article(
-            title="跑步减脂完全攻略", category="有氧运动", article_type="video",
-            summary="减脂的核心是热量赤字。跑步时保持心率在最大心率的60%-75%效果最佳。",
-            thumbnail="🏃", content="减脂的核心是热量赤字。跑步时保持心率在最大心率的60%-75%效果最佳。\n\n## 跑步减脂技巧\n1. 每周3-4次，每次30-60分钟\n2. 热身5分钟后开始正式跑步\n3. 匀速跑或慢跑为主\n4. 跑后记得拉伸放松\n\n坚持一个月，你一定会看到体型的变化！",
-            video_url="https://example.com/running.mp4", duration="15:20", views=28341,
-            author="官方", publish_date=today - timedelta(days=3),
+        )),
+        ("跑步减脂完全攻略", "有氧运动", "video", "🏃", dict(
+            video_url="https://www.bilibili.com/video/BV1DV411Y7rW/",
+            duration="15:20", views=28341, publish_date=today - timedelta(days=3),
             tags="跑步,减脂,有氧",
-        ),
-        Article(
-            title="训练后拉伸技巧", category="拉伸放松", article_type="article",
-            summary="每个拉伸动作保持20-30秒，不要弹跳。训练后拉伸有助于减少肌肉酸痛。",
-            thumbnail="🧘", content="每个拉伸动作保持20-30秒，不要弹跳。训练后拉伸有助于减少肌肉酸痛。\n\n## 全身拉伸动作\n1. 腿部后侧拉伸\n2. 臀部拉伸\n3. 背部拉伸\n4. 肩颈拉伸\n\n建议每个动作重复2-3次。",
-            video_url="", duration="10:15", views=9876,
-            author="官方", publish_date=today - timedelta(days=7),
+        )),
+        ("训练后拉伸技巧", "拉伸放松", "article", "🧘", dict(
+            duration="10:15", views=9876, publish_date=today - timedelta(days=7),
             tags="拉伸,放松,恢复",
-        ),
-        Article(
-            title="增肌饮食完全指南", category="营养饮食", article_type="article",
-            summary="增肌需要热量盈余，每公斤体重摄入2g蛋白质是基础目标。",
-            thumbnail="🥗", content="增肌需要热量盈余，每公斤体重摄入2g蛋白质是基础目标。\n\n## 增肌饮食建议\n1. 蛋白质：鸡胸肉、鱼、鸡蛋、豆腐\n2. 碳水：米饭、燕麦、红薯\n3. 优质脂肪：坚果、牛油果\n4. 少食多餐，每天5-6餐",
-            video_url="", duration="12:45", views=18792,
-            author="官方", publish_date=today - timedelta(days=10),
+        )),
+        ("增肌饮食完全指南", "营养饮食", "article", "🥗", dict(
+            duration="12:45", views=18792, publish_date=today - timedelta(days=10),
             tags="增肌,饮食,营养,蛋白质",
-        ),
-        Article(
-            title="HIIT高效燃脂训练", category="有氧运动", article_type="video",
-            summary="HIIT通过高强度间歇训练，可以在短时间内达到极佳的燃脂效果。",
-            thumbnail="🔥", content="HIIT通过高强度间歇训练，可以在短时间内达到极佳的燃脂效果。\n\n## HIIT训练示例\n1. 热身60秒\n2. 全力冲刺20秒 + 休息10秒\n3. 重复8-10轮\n4. 冷身拉伸5分钟\n\n每周2-3次即可，不需要天天做。",
-            video_url="https://example.com/hiit.mp4", duration="20:00", views=34521,
-            author="官方", publish_date=today - timedelta(days=2),
+        )),
+        ("HIIT高效燃脂训练", "有氧运动", "video", "🔥", dict(
+            video_url="https://www.bilibili.com/video/BV1Np4y1i7rG/",
+            duration="20:00", views=34521, publish_date=today - timedelta(days=2),
             tags="HIIT,燃脂,高强度,间歇训练",
-        ),
-        Article(
-            title="核心力量训练全解", category="力量训练", article_type="article",
-            summary="强大的核心是所有运动的基础。平板支撑、卷腹、俄罗斯转体是经典动作。",
-            thumbnail="💪", content="强大的核心是所有运动的基础。平板支撑、卷腹、俄罗斯转体是经典动作。\n\n## 核心训练动作\n1. 平板支撑：每次30-60秒，3组\n2. 卷腹：15-20个，3组\n3. 俄罗斯转体：20个，3组\n4. 鸟狗式：每侧10个，2组",
-            video_url="", duration="14:20", views=12456,
-            author="官方", publish_date=today - timedelta(days=8),
+        )),
+        ("核心力量训练全解", "力量训练", "article", "💪", dict(
+            duration="14:20", views=12456, publish_date=today - timedelta(days=8),
             tags="核心,腹肌,平板支撑",
-        ),
-        Article(
-            title="肩部训练详解", category="力量训练", article_type="video",
-            summary="肩部训练要注意三角肌前中后束的全面发展，推举和侧平举是基础动作。",
-            thumbnail="🎯", content="肩部训练要注意三角肌前中后束的全面发展，推举和侧平举是基础动作。\n\n## 肩部训练计划\n1. 热身肩部：绕肩、手臂画圈\n2. 哑铃推举：12个x4组\n3. 侧平举：15个x4组\n4. 面拉：20个x3组",
-            video_url="https://example.com/shoulder.mp4", duration="18:30", views=8234,
-            author="官方", publish_date=today - timedelta(days=4),
+        )),
+        ("肩部训练详解", "力量训练", "video", "🎯", dict(
+            video_url="https://www.bilibili.com/video/BV1F1421t7fa/",
+            duration="18:30", views=8234, publish_date=today - timedelta(days=4),
             tags="肩部,三角肌,力量训练",
-        ),
-        Article(
-            title="运动损伤预防与恢复", category="运动损伤", article_type="article",
-            summary="预防运动损伤比治疗更重要。正确的姿势、充分的热身、合理的训练强度是关键。",
-            thumbnail="🩹", content="预防运动损伤比治疗更重要。正确的姿势、充分的热身、合理的训练强度是关键。\n\n## 损伤预防要点\n1. 训练前充分热身10-15分钟\n2. 使用正确的动作姿势\n3. 循序渐进增加训练强度\n4. 保证充足的休息和恢复\n5. 感觉疼痛时立即停止训练",
-            video_url="", duration="16:00", views=6543,
-            author="官方", publish_date=today - timedelta(days=12),
+        )),
+        ("运动损伤预防与恢复", "运动损伤", "article", "🩹", dict(
+            duration="16:00", views=6543, publish_date=today - timedelta(days=12),
             tags="损伤,预防,恢复,运动安全",
-        ),
+        )),
     ]
+    samples = [Article(**_article_fields(title, cat, atype, thumb, **extra)) for title, cat, atype, thumb, extra in specs]
     db.session.bulk_save_objects(samples)
     db.session.commit()
+
+
+def sync_article_contents():
+    """将详细正文同步到已有文章（启动时执行，便于升级旧库）。"""
+    updated = False
+    for title, detail in ARTICLE_CONTENTS.items():
+        article = Article.query.filter_by(title=title).first()
+        if not article:
+            continue
+        if article.summary != detail.get("summary") or article.content != detail.get("content"):
+            article.summary = detail["summary"]
+            article.content = detail["content"]
+            updated = True
+    if updated:
+        db.session.commit()
 
 
 def seed_coaches():
@@ -148,8 +155,32 @@ def seed_achievements():
     db.session.commit()
 
 
+# 知识库视频教程（B 站嵌入播放）
+DEMO_VIDEO_URLS = {
+    "跑步减脂完全攻略": "https://www.bilibili.com/video/BV1DV411Y7rW/",
+    "HIIT高效燃脂训练": "https://www.bilibili.com/video/BV1Np4y1i7rG/",
+    "肩部训练详解": "https://www.bilibili.com/video/BV1F1421t7fa/",
+}
+
+
+def fix_demo_video_urls():
+    """同步三篇视频教程的 B 站链接（已有库在启动时也会更新）。"""
+    updated = False
+    for title, url in DEMO_VIDEO_URLS.items():
+        article = Article.query.filter_by(title=title, article_type="video").first()
+        if not article:
+            continue
+        if article.video_url != url:
+            article.video_url = url
+            updated = True
+    if updated:
+        db.session.commit()
+
+
 def seed_all():
     seed_test_user()
     seed_articles()
+    sync_article_contents()
+    fix_demo_video_urls()
     seed_coaches()
     seed_achievements()

@@ -1,0 +1,36 @@
+# 推送 main 后 SSH 到云服务器执行 scripts/cloud-update.sh
+# 需在仓库 Settings → Secrets 配置：DEPLOY_HOST、DEPLOY_USER、DEPLOY_SSH_KEY
+# 可选：DEPLOY_PATH（默认 /opt/fitmate）
+
+name: Deploy to Cloud Server
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'frontend/fitmate-frontend/**'
+      - 'compose.prod.yaml'
+      - 'scripts/cloud-update.sh'
+      - '.github/workflows/deploy-cloud.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    if: ${{ secrets.DEPLOY_HOST != '' && secrets.DEPLOY_SSH_KEY != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -eu
+            DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}"
+            if [ -z "$DEPLOY_PATH" ]; then DEPLOY_PATH="/opt/fitmate"; fi
+            cd "$DEPLOY_PATH"
+            chmod +x scripts/cloud-update.sh 2>/dev/null || true
+            ./scripts/cloud-update.sh

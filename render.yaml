@@ -1,0 +1,23 @@
+# Render Blueprint（备选）
+# 说明：FitMate 需要 MySQL；Render 免费数据库为 PostgreSQL，本蓝图以 Web 服务 + 内置 Compose 思路为主。
+# 作业推荐仍使用 腾讯云/阿里云 + compose.prod.yaml，见 docs/deployment.md
+
+services:
+  - type: web
+    name: fitmate
+    runtime: docker
+    plan: free
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    envVars:
+      - key: FITMATE_PRODUCTION
+        value: "1"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: QWEN_API_KEY
+        sync: false

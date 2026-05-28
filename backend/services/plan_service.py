@@ -654,8 +654,16 @@ def save_ai_plan(user_id: int, plan_data: dict, goal: str, level: str, start_dat
                     duration_str=duration_str_val,
                     calories=ex.get("calories", 0) or 0,
                     sets=sets_val,
-                    reps=str(ex.get("reps")) if ex.get("reps") is not None else None,
-                    rest=str(ex.get("rest")) if ex.get("rest") is not None else None,
+                    reps=(
+                        str(ex.get("reps"))[:32]
+                        if ex.get("reps") is not None
+                        else None
+                    ),
+                    rest=(
+                        str(ex.get("rest"))[:32]
+                        if ex.get("rest") is not None
+                        else None
+                    ),
                     description=ex.get("description", ""),
                     target_date=target_date,
                 )

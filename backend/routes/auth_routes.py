@@ -3,6 +3,7 @@ import secrets
 
 from flask import Blueprint, request
 from flask_jwt_extended import jwt_required
+from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.security import generate_password_hash
 
 from models.user import User
@@ -50,13 +51,19 @@ def login():
     username = (payload.get("username") or "").strip() or None
     password = payload.get("password") or ""
 
-    user = None
-    if email:
-        user = db.session.query(User).filter_by(email=email).first()
-    elif phone:
-        user = db.session.query(User).filter_by(phone=phone).first()
-    elif username:
-        user = db.session.query(User).filter_by(username=username).first()
+    try:
+        user = None
+        if email:
+            user = db.session.query(User).filter_by(email=email).first()
+        elif phone:
+            user = db.session.query(User).filter_by(phone=phone).first()
+        elif username:
+            user = db.session.query(User).filter_by(username=username).first()
+    except SQLAlchemyError:
+        return fail(
+            "数据库连接失败，请检查 MYSQL_ROOT_PASSWORD 是否与 MySQL 数据卷初始化密码一致",
+            503,
+        )
 
     if not user or not verify_password(user, password):
         return fail("invalid username or password", 401)
