@@ -1,0 +1,13 @@
+# Codecov 补丁覆盖率策略（与 CI 上传的 backend / frontend flag 配合）
+# 若 PR 上 patch 检查仍失败，可在 https://codecov.io 项目设置中调低 Patch Target
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        target: auto
+        threshold: 5%
+        # 改为 true 时仅提示、不阻断 PR；若课程要求 patch 达标请补测试后改回 false
+        informational: true

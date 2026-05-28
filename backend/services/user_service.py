@@ -40,6 +40,10 @@ def update_user_profile(user, payload: dict):
     user.location = payload.get("location", user.location)
     user.goal = payload.get("goal", user.goal)
     user.current_coach_id = payload.get("currentCoachId", user.current_coach_id)
+    if "coachGender" in payload:
+        user.coach_gender = payload.get("coachGender") or user.coach_gender
+    if "coachPersonality" in payload:
+        user.coach_personality = payload.get("coachPersonality") or user.coach_personality
     db.session.commit()
 
 

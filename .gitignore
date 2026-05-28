@@ -9,3 +9,4 @@ __pycache__/
 !**/.env.example
 .vscode
 .DS_Store
+secrets/db_password.txt

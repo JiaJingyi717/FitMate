@@ -2,6 +2,8 @@ from flask import Flask
 from flask_cors import CORS
 import os
 
+from sqlalchemy import text
+
 from config import Config
 from data.seed_data import seed_all
 from utils.security_config import validate_app_secrets
@@ -14,6 +16,58 @@ from routes.users_routes import users_bp
 from routes.ai_routes import ai_bp
 from utils.extensions import db, jwt
 from utils.response import ok
+
+
+def _register_all_models():
+    """导入全部 ORM 模型，供 db.create_all() 注册元数据。"""
+    import models.achievement  # noqa: F401
+    import models.article
+    import models.article_interaction
+    import models.coach
+    import models.coach_session
+    import models.knowledge
+    import models.plan
+    import models.plan_task
+    import models.record
+    import models.user
+
+
+def _apply_mysql_baseline_schema():
+    """空库或仅有部分表时执行 schema_mysql.sql（与 Docker init 脚本一致，避免 ORM 与 BIGINT 外键冲突）。"""
+    has_core = db.session.execute(
+        text(
+            "SELECT 1 FROM information_schema.tables "
+            "WHERE table_schema = DATABASE() AND table_name = 'training_plan' LIMIT 1"
+        )
+    ).fetchone()
+    if has_core:
+        return
+
+    schema_path = os.path.join(os.path.dirname(__file__), "schema_mysql.sql")
+    if not os.path.isfile(schema_path):
+        print("[migration] 警告: 未找到 schema_mysql.sql")
+        return
+
+    print("[migration] 应用 schema_mysql.sql（补全缺失表）")
+    with open(schema_path, encoding="utf-8") as f:
+        content = f.read()
+
+    for part in content.split(";"):
+        stmt = part.strip()
+        if not stmt or stmt.startswith("--"):
+            continue
+        upper = stmt.upper()
+        if upper.startswith("CREATE DATABASE") or upper.startswith("USE "):
+            continue
+        try:
+            db.session.execute(text(stmt))
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            err = str(e).lower()
+            if "already exists" in err or "duplicate" in err:
+                continue
+            print(f"[migration] schema WARN: {e}")
 
 
 def create_app():
@@ -64,7 +118,6 @@ def create_app():
     app.register_blueprint(ai_bp, url_prefix="/api/ai")
 
     with app.app_context():
-        from sqlalchemy import text
         from time import sleep
 
         dialect = db.engine.dialect.name
@@ -72,6 +125,7 @@ def create_app():
         skip_migrations = os.environ.get("FITMATE_SKIP_MIGRATIONS", "0") == "1"
 
         if skip_migrations or is_sqlite:
+            _register_all_models()
             db.create_all()
             seed_all()
         else:
@@ -92,6 +146,8 @@ def create_app():
                     else:
                         print("[migration] 错误：无法连接到数据库，跳过迁移")
                         return app
+
+            _apply_mysql_baseline_schema()
 
             # 安全地添加缺失的列
             def safe_add_column_if_missing(table, column, col_type):
@@ -146,8 +202,10 @@ def create_app():
             safe_add_column_if_missing("plan_tasks", "duration_str", "VARCHAR(32) DEFAULT ''")
             safe_add_column_if_missing("plan_tasks", "calories", "INT DEFAULT 0")
             safe_add_column_if_missing("plan_tasks", "sets", "INT NULL")
-            safe_add_column_if_missing("plan_tasks", "reps", "VARCHAR(32) NULL")  # 修改为 VARCHAR 支持 "8-12" 等格式
+            safe_add_column_if_missing("plan_tasks", "reps", "VARCHAR(32) NULL")
             safe_add_column_if_missing("plan_tasks", "rest", "VARCHAR(32) NULL")
+            # 旧库 schema 中 reps 为 INT，AI 计划会写入 "8-12" 等字符串，需改列类型
+            safe_modify_column_type("plan_tasks", "reps", "VARCHAR(32) NULL")
 
             safe_add_column_if_missing("articles", "article_type", "VARCHAR(16) DEFAULT 'article'")
             safe_add_column_if_missing("articles", "summary", "TEXT")

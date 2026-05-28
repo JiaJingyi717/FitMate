@@ -197,9 +197,17 @@
 </template>
 
 <script setup>
+defineOptions({ name: 'Home' })
+
 import { ref, nextTick, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { askCoach } from '../api/ai'
+import { getUserProfile, updateUserProfile } from '../api/user'
+import {
+  clearCoachChatSession,
+  loadCoachChatSession,
+  saveCoachChatSession,
+} from '../utils/coachChatStorage'
 import logger from '../utils/logger'
 
 const router = useRouter()
@@ -232,6 +240,8 @@ const quickSuggestions = [
 
 // 消息列表
 const messages = ref([])
+/** 恢复完成前禁止写入 sessionStorage，避免空列表覆盖已有对话 */
+const chatReady = ref(false)
 
 // 意图检测 - 识别用户消息中的导航意图
 const detectIntent = (text) => {
@@ -293,23 +303,75 @@ function getTimeStr() {
   return `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
 }
 
-// 初始化会话 - 加载欢迎语
-function initWelcome() {
+function createWelcomeMessage() {
   const coachNames = { male: '小帅教练', female: '小雅教练' }
   const personalityNames = { gentle: '温柔鼓励型', strict: '严格激励型', energetic: '活力四射型' }
 
-  messages.value = [{
+  return {
     id: 1,
     sender: 'coach',
     text: `你好！我是你的AI健身教练${coachNames[gender.value]}（${personalityNames[personality.value]}）。很高兴认识你！\n\n我可以帮你：\n• 制定个性化训练计划\n• 解答健身动作要领\n• 提供饮食建议\n\n有什么我可以帮助你的吗？`,
-    time: getTimeStr()
-  }]
+    time: getTimeStr(),
+  }
 }
 
-// 监听教练设置变化，重新初始化欢迎语
+function persistCoachChat() {
+  if (!chatReady.value || messages.value.length === 0) return
+  saveCoachChatSession({
+    messages: messages.value,
+    gender: gender.value,
+    personality: personality.value,
+  })
+}
+
+function restoreCoachChat() {
+  const saved = loadCoachChatSession()
+  if (!saved) return false
+
+  messages.value = saved.messages
+  if (saved.gender === 'male' || saved.gender === 'female') {
+    gender.value = saved.gender
+  }
+  if (saved.personality && personalities.some((p) => p.value === saved.personality)) {
+    personality.value = saved.personality
+  }
+  nextTick(() => scrollToBottom())
+  return true
+}
+
+// 初始化会话 - 加载欢迎语
+function initWelcome() {
+  messages.value = [createWelcomeMessage()]
+  if (chatReady.value) {
+    persistCoachChat()
+  }
+}
+
+// 同步教练人设到个人资料（供后端 AI 上下文使用）
+async function saveCoachPreferences() {
+  try {
+    await updateUserProfile({
+      coachGender: gender.value,
+      coachPersonality: personality.value,
+    })
+  } catch {
+    // 非阻塞：未登录或网络异常时仍可使用页面内教练设置
+  }
+}
+
+// 教练人设变更仅同步到服务端与本地会话，不清空历史对话
 watch([gender, personality], () => {
-  initWelcome()
+  saveCoachPreferences()
+  persistCoachChat()
 })
+
+watch(
+  messages,
+  () => {
+    persistCoachChat()
+  },
+  { deep: true }
+)
 
 // 发送消息
 async function handleSendMessage() {
@@ -326,6 +388,7 @@ async function handleSendMessage() {
     time: timeStr
   }
   messages.value.push(userMsg)
+  persistCoachChat()
   inputMessage.value = ''
   scrollToBottom()
 
@@ -340,10 +403,10 @@ async function handleSendMessage() {
       content: m.text
     }))
 
-  // 添加上下文信息
+  // 教练人设会由后端与数据库个人资料合并；此处传递当前页选择作为优先项
   const context = {
     coach_gender: gender.value,
-    coach_personality: personality.value
+    coach_personality: personality.value,
   }
 
   try {
@@ -364,6 +427,7 @@ async function handleSendMessage() {
         recommendation: intentRecommendation
       }
       messages.value.push(aiMsg)
+      persistCoachChat()
     } else {
       throw new Error(res.message || '获取回复失败')
     }
@@ -386,6 +450,7 @@ async function handleSendMessage() {
       time: getTimeStr(),
       recommendation: intentRecommendation
     })
+    persistCoachChat()
   } finally {
     isLoading.value = false
     isSpeaking.value = false
@@ -496,15 +561,41 @@ const handleRecommendation = (link) => {
 // 重置会话
 function handleResetSession() {
   if (confirm('确定要清空聊天记录并开始新对话吗？')) {
+    clearCoachChatSession()
     messages.value = []
     initWelcome()
+    persistCoachChat()
     scrollToBottom()
   }
 }
 
-// 页面加载时初始化
-onMounted(() => {
-  initWelcome()
+async function loadUserCoachProfile() {
+  try {
+    const res = await getUserProfile()
+    if (res.code !== 200 || !res.data) return
+    const { coachGender, coachPersonality } = res.data
+    if (coachGender === 'male' || coachGender === 'female') {
+      gender.value = coachGender
+    }
+    if (coachPersonality && personalities.some((p) => p.value === coachPersonality)) {
+      personality.value = coachPersonality
+    }
+  } catch {
+    // 保持默认教练设置
+  }
+}
+
+// 页面加载时初始化：先恢复本地对话，再拉资料，避免 watch 用空列表覆盖 sessionStorage
+onMounted(async () => {
+  chatReady.value = false
+  const restored = restoreCoachChat()
+  await loadUserCoachProfile()
+  if (!restored) {
+    initWelcome()
+  }
+  chatReady.value = true
+  persistCoachChat()
+
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
   isVoiceSupported.value = !!SpeechRecognition
 })

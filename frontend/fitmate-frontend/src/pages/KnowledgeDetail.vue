@@ -24,6 +24,7 @@
             <span class="meta-item">👁️ {{ formatNumber(article.views) }} 浏览</span>
             <span class="meta-item">❤️ {{ formatNumber(article.likes) }} 点赞</span>
             <span v-if="article.duration" class="meta-item">⏱️ {{ article.duration }}</span>
+            <span v-if="readingMinutes" class="meta-item">📖 约 {{ readingMinutes }} 分钟阅读</span>
           </div>
 
           <!-- 操作按钮 -->
@@ -48,18 +49,11 @@
 
         <!-- 视频播放器 -->
         <div v-if="article.type === 'video'" class="video-player">
-          <div class="video-placeholder">
-            <span class="video-emoji">{{ article.thumbnail }}</span>
-            <div class="play-overlay">
-              <span class="play-btn">▶️</span>
-            </div>
-          </div>
+          <ArticleVideoPlayer :video-url="article.videoUrl" />
           <div class="video-info">
             <h3>视频简介</h3>
             <p>{{ article.description }}</p>
-            <div class="video-tip">
-              <p>💡 <strong>提示：</strong>建议使用全屏模式观看以获得最佳体验。</p>
-            </div>
+            <div v-if="article.content" class="video-content-body" v-html="renderedContent"></div>
           </div>
         </div>
 
@@ -149,6 +143,8 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getArticleDetail, toggleArticleLike, toggleArticleCollect, getArticleComments, addArticleComment } from '../api/article'
+import ArticleVideoPlayer from '../components/ArticleVideoPlayer.vue'
+import { estimateReadingMinutes, renderArticleMarkdown } from '../utils/renderArticleMarkdown'
 
 const router = useRouter()
 const route = useRoute()
@@ -179,43 +175,9 @@ const newComment = ref('')
 const relatedArticles = ref([])
 const commentsTotal = ref(0)
 
-// HTML 实体转义函数 - 防止 XSS 攻击
-function escapeHtml(text) {
-  if (!text) return ''
-  const map = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#039;'
-  }
-  return String(text).replace(/[&<>"']/g, m => map[m])
-}
+const renderedContent = computed(() => renderArticleMarkdown(article.content))
 
-// 计算属性 - 安全渲染内容
-const renderedContent = computed(() => {
-  if (!article.content) return ''
-  return article.content
-    .split('\n')
-    .map(line => {
-      if (line.startsWith('# ')) {
-        return `<h1 class="content-h1">${escapeHtml(line.slice(2))}</h1>`
-      } else if (line.startsWith('## ')) {
-        return `<h2 class="content-h2">${escapeHtml(line.slice(3))}</h2>`
-      } else if (line.startsWith('### ')) {
-        return `<h3 class="content-h3">${escapeHtml(line.slice(4))}</h3>`
-      } else if (line.startsWith('- ')) {
-        return `<li class="content-li">${escapeHtml(line.slice(2))}</li>`
-      } else if (line.startsWith('**') && line.endsWith('**')) {
-        return `<p class="content-bold"><strong>${escapeHtml(line.slice(2, -2))}</strong></p>`
-      } else if (line.trim() === '') {
-        return ''
-      } else {
-        return `<p class="content-p">${escapeHtml(line)}</p>`
-      }
-    })
-    .join('')
-})
+const readingMinutes = computed(() => estimateReadingMinutes(article.content))
 
 // 方法
 function formatNumber(num) {
@@ -534,17 +496,12 @@ onMounted(() => {
   margin: 0 0 16px 0;
 }
 
-.video-tip {
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  border-radius: 8px;
-  padding: 12px 16px;
-}
-
-.video-tip p {
-  margin: 0;
-  font-size: 14px;
-  color: #1e40af;
+.video-content-body {
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+  color: #374151;
+  line-height: 1.8;
 }
 
 /* 文章内容 */
@@ -586,12 +543,68 @@ onMounted(() => {
   margin: 12px 0;
 }
 
-.content-body :deep(.content-li) {
-  margin: 8px 0 8px 24px;
+.content-body :deep(.content-ul),
+.content-body :deep(.content-ol) {
+  margin: 12px 0 16px 0;
+  padding-left: 1.5rem;
+}
+
+.content-body :deep(.content-ul) {
   list-style: disc;
 }
 
-.content-body :deep(.content-bold) {
+.content-body :deep(.content-ol) {
+  list-style: decimal;
+}
+
+.content-body :deep(.content-li),
+.content-body :deep(.content-oli) {
+  margin: 8px 0;
+  line-height: 1.75;
+}
+
+.content-body :deep(.content-quote) {
+  margin: 16px 0;
+  padding: 14px 18px;
+  border-left: 4px solid #3b82f6;
+  background: #eff6ff;
+  border-radius: 0 8px 8px 0;
+  color: #1e40af;
+}
+
+.content-body :deep(.content-quote p) {
+  margin: 0;
+}
+
+.content-body :deep(.content-table-wrap) {
+  margin: 16px 0;
+  overflow-x: auto;
+}
+
+.content-body :deep(.content-table) {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.content-body :deep(.content-table th),
+.content-body :deep(.content-table td) {
+  border: 1px solid #e5e7eb;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.content-body :deep(.content-table th) {
+  background: #f9fafb;
+  font-weight: 600;
+  color: #374151;
+}
+
+.content-body :deep(.content-table tr:nth-child(even) td) {
+  background: #fafafa;
+}
+
+.content-body :deep(strong) {
   font-weight: 600;
   color: #1f2937;
 }
