@@ -15,6 +15,9 @@ from routes.plan_routes import plan_bp
 from routes.users_routes import users_bp
 from routes.ai_routes import ai_bp
 from utils.extensions import db, jwt
+from utils.health import get_health_payload
+from utils.logger import setup_logging
+from utils.metrics import get_metrics_payload, record_request_end, record_request_start
 from utils.response import ok
 
 
@@ -77,9 +80,29 @@ def create_app():
     db.init_app(app)
     jwt.init_app(app)
     validate_app_secrets(app)
+    setup_logging(app)
+
+    @app.before_request
+    def _monitoring_before():
+        from flask import request
+
+        record_request_start()
+        app.logger.info("request_start method=%s path=%s", request.method, request.path)
 
     @app.after_request
     def _security_headers(response):
+        from flask import request
+
+        record_request_end(
+            response,
+            had_auth_header=bool(request.headers.get("Authorization")),
+        )
+        app.logger.info(
+            "request_end method=%s path=%s status=%s",
+            request.method,
+            request.path,
+            response.status_code,
+        )
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
@@ -95,12 +118,17 @@ def create_app():
 
     @app.get("/api/health")
     def health():
-        return ok({"status": "up"})
+        return ok(get_health_payload())
 
     @app.get("/health")
     def health_probe():
         """Docker / 负载均衡健康检查（与 /api/health 一致）。"""
-        return ok({"status": "up"})
+        return ok(get_health_payload())
+
+    @app.get("/api/metrics")
+    def metrics():
+        """进程内 HTTP 指标（请求量、延迟、错误率）。"""
+        return ok(get_metrics_payload())
 
     # 用户认证
     app.register_blueprint(auth_bp, url_prefix="/api")
