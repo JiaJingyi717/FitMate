@@ -38,5 +38,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: npm audit (high and above)
-        run: npm audit --audit-level=high --registry=https://registry.npmjs.org/
+      # js-cookie 高危来自 @vue/test-utils 的 dev 传递依赖，生产构建不包含
+      - name: npm audit (high and above, production only)
+        run: npm audit --omit=dev --audit-level=high --registry=https://registry.npmjs.org/

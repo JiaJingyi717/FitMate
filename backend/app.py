@@ -29,7 +29,7 @@ def _register_all_models():
     import models.plan
     import models.plan_task
     import models.record
-    import models.user
+    import models.user  # noqa: F401
 
 
 def _apply_mysql_baseline_schema():
