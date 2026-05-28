@@ -114,23 +114,3 @@ deploy.bat
 - 浏览器访问：<http://localhost:80>（或 `.env` 中 `HTTP_PORT`）
 
 4. 镜像构建与推送：`.github/workflows/docker.yml`（推送到 GHCR）。
-
-## 七、云服务部署（课程作业）
-
-完整步骤见 **[docs/deployment.md](docs/deployment.md)**（推荐腾讯云/阿里云 + `./deploy.sh`）。
-
-作业提交还需：`docs/contributions/12-cloud/你的名字.md`、部署成功与环境变量截图、可访问的线上链接。
-
-**登录报 500 / `Access denied for user 'root'`**：多为 MySQL 数据卷里的 root 密码与 `.env` 里 `MYSQL_ROOT_PASSWORD` 不一致。开发环境默认密码为 **`123456`**（与旧版 compose 一致）。在根目录 `.env` 中设置 `MYSQL_ROOT_PASSWORD=123456` 后执行 `docker compose up -d --force-recreate backend`。若仍失败且可清空数据：`docker compose down -v` 后重新 `up`。
-
-**拉取 `python:3.12-slim` 失败**（`short read` / `unexpected EOF` / `content descriptor ... not found`）：多为直连 Docker Hub 不稳定或本地缓存损坏。可先清理构建缓存 `docker buildx prune -f`，再通过国内镜像拉取并打标签：
-
-```bat
-docker pull docker.m.daocloud.io/library/python:3.12-slim
-docker tag docker.m.daocloud.io/library/python:3.12-slim python:3.12-slim
-docker compose build backend
-```
-
-本地已有 `fitmate-backend` 镜像时，日常启动用 `docker compose up -d` 即可，不必每次 `--build`。
-
-**backend 一直 unhealthy / `Table 'fitmate.articles' doesn't exist`**：多为 MySQL 数据卷里只有部分表（初始化脚本未跑完或旧数据）。后端启动时会自动 `create_all` 补全表；若仍异常可 `docker compose restart backend`。需要完全重置库：`docker compose down -v` 后重新 `up`（会清空用户数据）。
