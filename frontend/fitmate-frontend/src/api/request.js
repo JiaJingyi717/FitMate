@@ -1,6 +1,7 @@
 // src/api/request.js
 import axios from 'axios'
 import { clearCoachChatSession } from '../utils/coachChatStorage'
+import { logApiEvent, logError } from '../utils/logger'
 
 /** 仅浏览器环境跳转登录；Vitest/jsdom 中不调度定时器，避免 CI 报 window is not defined */
 function scheduleLoginRedirect() {
@@ -25,6 +26,7 @@ const service = axios.create({
 // 请求拦截器：自动带 token
 service.interceptors.request.use(
   (config) => {
+    config.metadata = { startTime: Date.now() }
     // 优先从 sessionStorage 获取 token（当前会话）
     let token = sessionStorage.getItem('token')
     // 如果 sessionStorage 没有，从 localStorage 获取（记住我）
@@ -42,6 +44,17 @@ service.interceptors.request.use(
 // 响应拦截器：统一处理后端返回
 service.interceptors.response.use(
   (response) => {
+    const config = response.config
+    const start = config?.metadata?.startTime
+    const durationMs = start != null ? Date.now() - start : undefined
+    logApiEvent({
+      method: config?.method?.toUpperCase(),
+      url: config?.url,
+      status: response.status,
+      durationMs,
+      ok: true,
+    })
+
     const res = response.data
 
     // 处理无数据响应（如 204 No Content）
@@ -112,6 +125,17 @@ service.interceptors.response.use(
     } else if (error.request) {
       message = '网络连接失败，请检查网络'
     }
+
+    const start = error.config?.metadata?.startTime
+    const durationMs = start != null ? Date.now() - start : undefined
+    logApiEvent({
+      method: error.config?.method?.toUpperCase(),
+      url: error.config?.url,
+      status: error.response?.status ?? 0,
+      durationMs,
+      ok: false,
+    })
+    logError('api_request_failed', { message })
 
     return Promise.reject({ code: error.response?.status || -1, message })
   }

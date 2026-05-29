@@ -8,7 +8,10 @@ ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 COPY requirements-prod.txt .
-RUN pip install --prefix=/install -r requirements-prod.txt
+RUN pip install --prefix=/install -r requirements-prod.txt \
+    -i https://mirrors.aliyun.com/pypi/simple/ \
+    --trusted-host mirrors.aliyun.com \
+    --default-timeout=120
 
 # ---------- 开发：热重载（挂载源码） ----------
 FROM python:3.12-slim AS development
@@ -17,7 +20,10 @@ WORKDIR /app
 
 COPY --from=builder /install /usr/local
 COPY requirements.txt requirements-prod.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt \
+    -i https://mirrors.aliyun.com/pypi/simple/ \
+    --trusted-host mirrors.aliyun.com \
+    --default-timeout=120
 
 COPY . .
 
