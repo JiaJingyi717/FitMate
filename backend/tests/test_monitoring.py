@@ -1,6 +1,6 @@
 """监控：健康检查与指标端点。"""
 
-from utils.metrics import get_metrics_payload, reset_metrics_for_tests
+from utils.metrics import reset_metrics_for_tests
 
 
 def test_health_endpoints(client):
