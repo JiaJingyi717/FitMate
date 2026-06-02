@@ -44,11 +44,12 @@ service.interceptors.request.use(
 // 响应拦截器：统一处理后端返回
 service.interceptors.response.use(
   (response) => {
-    const start = response.config.metadata?.startTime
+    const config = response.config
+    const start = config?.metadata?.startTime
     const durationMs = start != null ? Date.now() - start : undefined
     logApiEvent({
-      method: response.config.method?.toUpperCase(),
-      url: response.config.url,
+      method: config?.method?.toUpperCase(),
+      url: config?.url,
       status: response.status,
       durationMs,
       ok: true,
@@ -114,7 +115,7 @@ service.interceptors.response.use(
         case 502:
         case 503:
         case 504:
-          message = '服务暂不可用，请稍后重试'
+          message = error.response.data?.message || '服务暂不可用，请稍后重试'
           break
         default:
           message = error.response.data?.message || '请求失败'
