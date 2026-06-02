@@ -36,7 +36,8 @@ export function updateAvatar(data) {
   return request({
     url: '/api/users/profile/avatar',
     method: 'put',
-    data
+    data,
+    timeout: 30000,
   })
 }
 

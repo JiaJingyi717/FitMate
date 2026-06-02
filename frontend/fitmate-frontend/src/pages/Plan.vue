@@ -19,13 +19,6 @@
             </svg>
             AI生成计划
           </button>
-          <button class="btn-secondary" @click="showManualDialog = true">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="12" y1="5" x2="12" y2="19"/>
-              <line x1="5" y1="12" x2="19" y2="12"/>
-            </svg>
-            手动创建
-          </button>
         </div>
       </div>
     </div>
@@ -143,7 +136,8 @@
             <p class="plan-desc">{{ plan.description }}</p>
             <div class="plan-meta">
               <span>📅 {{ plan.duration }}</span>
-              <span>💪 {{ plan.tasks.length }}次训练</span>
+              <span>💪 {{ plan.trainingDays || 0 }}次训练</span>
+              <span>⏱️ {{ plan.totalDuration || 0 }}分钟</span>
               <span>🔥 {{ getPlanCalories(plan) }}卡路里</span>
             </div>
             <div class="plan-progress">
@@ -288,107 +282,6 @@
       </div>
     </div>
 
-    <!-- Manual Creation Dialog -->
-    <div v-if="showManualDialog" class="dialog-overlay" @click.self="showManualDialog = false">
-      <div class="dialog dialog-lg">
-        <div class="dialog-header">
-          <h3 class="dialog-title">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M6.5 6.5h11M6.5 17.5h11M4 10.5v3M20 10.5v3M6.5 4v16M17.5 4v16"/>
-            </svg>
-            手动创建训练计划
-          </h3>
-          <button class="dialog-close" @click="showManualDialog = false">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"/>
-              <line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
-        </div>
-        <div class="dialog-body">
-          <div class="form-section">
-            <label class="form-label">计划名称 *</label>
-            <input v-model="manualForm.name" type="text" class="form-input" placeholder="例如：周一胸部训练" />
-          </div>
-
-          <div class="form-section">
-            <label class="form-label">计划描述</label>
-            <input v-model="manualForm.description" type="text" class="form-input" placeholder="简单描述这个训练计划" />
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">计划周期</label>
-              <input v-model="manualForm.duration" type="text" class="form-input" placeholder="例如：4周" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">难度等级</label>
-              <select v-model="manualForm.difficulty" class="form-select">
-                <option value="初级">初级</option>
-                <option value="中级">中级</option>
-                <option value="高级">高级</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">开始日期 *</label>
-              <input v-model="manualForm.startDate" type="date" class="form-input" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">结束日期 *</label>
-              <input v-model="manualForm.endDate" type="date" class="form-input" />
-            </div>
-          </div>
-
-          <div class="form-section">
-            <label class="form-label">训练动作列表</label>
-            <div v-if="manualTasks.length > 0" class="task-list">
-              <div v-for="(task, index) in manualTasks" :key="index" class="task-list-item">
-                <span class="task-number">{{ index + 1 }}</span>
-                <div class="task-details">
-                  <span class="task-name">{{ task.name }}</span>
-                  <span class="task-info">{{ task.type }} · {{ task.duration }} · {{ task.calories }}卡</span>
-                </div>
-                <button class="remove-btn" @click="removeTask(index)">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="18" y1="6" x2="6" y2="18"/>
-                    <line x1="6" y1="6" x2="18" y2="18"/>
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div class="form-section">
-            <label class="form-label">从训练库选择动作</label>
-            <div class="exercise-grid">
-              <button
-                v-for="exercise in presetExercises"
-                :key="exercise.name"
-                class="exercise-btn"
-                @click="addPresetExercise(exercise)"
-              >
-                <span class="exercise-name">{{ exercise.name }}</span>
-                <span class="exercise-meta">{{ exercise.type }} · {{ exercise.duration }}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-        <div class="dialog-footer">
-          <button class="btn-outline" @click="showManualDialog = false">取消</button>
-          <button
-            class="btn-primary"
-            :disabled="!canSaveManual"
-            @click="saveManualPlan"
-          >
-            保存计划
-          </button>
-        </div>
-      </div>
-    </div>
-
     <!-- Plan Detail Dialog -->
     <div v-if="showPlanDetail" class="dialog-overlay" @click.self="showPlanDetail = false">
       <div class="dialog dialog-xl">
@@ -420,8 +313,9 @@
               <p class="detail-desc">{{ selectedPlan.description }}</p>
               <div class="detail-stats">
                 <span>📅 {{ selectedPlan.duration }}</span>
-                <span>💪 {{ selectedPlan.totalTasks || selectedPlan.tasks?.length || 0 }}个动作</span>
-                <span>🔥 {{ selectedPlan.totalCalories || 0 }}卡路里</span>
+                <span>💪 {{ selectedPlan.trainingDays || selectedPlan.totalTasks || 0 }}次训练</span>
+                <span>⏱️ {{ selectedPlan.totalDuration || 0 }}分钟</span>
+                <span>🔥 {{ selectedPlan.plannedCalories ?? selectedPlan.totalCalories ?? 0 }}卡路里</span>
                 <span v-if="selectedPlan.progress !== undefined">{{ selectedPlan.progress }}%完成</span>
               </div>
             </div>
@@ -491,8 +385,8 @@
                       <div v-else class="no-tasks">暂无任务</div>
 
                       <div class="day-summary">
-                        <span>⏱️ {{ day.totalDuration || 0 }}分钟</span>
-                        <span>🔥 {{ day.totalCalories || 0 }}卡</span>
+                        <span>⏱️ {{ day.completedDuration || day.totalDuration || 0 }}分钟</span>
+                        <span>🔥 {{ day.completedCalories || day.totalCalories || 0 }}卡</span>
                         <span v-if="day.progress > 0">{{ day.progress }}%</span>
                       </div>
                     </div>
@@ -541,7 +435,6 @@ import {
   getPlanOverview,
   getPlanList,
   getPlanDetail,
-  createPlan,
   deletePlan as apiDeletePlan,
   getTodayTasks,
   completeTodayTask
@@ -551,7 +444,6 @@ import logger from '../utils/logger'
 
 const activeTab = ref('all')
 const showAIDialog = ref(false)
-const showManualDialog = ref(false)
 const showPlanDetail = ref(false)
 const selectedPlan = ref(null)
 const isLoading = ref(false)
@@ -607,29 +499,6 @@ const aiForm = ref({
   additionalRequirements: ''
 })
 
-const manualForm = ref({
-  name: '',
-  description: '',
-  duration: '',
-  difficulty: '中级',
-  startDate: '',
-  endDate: ''
-})
-
-const manualTasks = ref([])
-
-const presetExercises = [
-  { name: '跑步', type: '有氧', duration: '20分钟', calories: 200 },
-  { name: '快走', type: '有氧', duration: '30分钟', calories: 150 },
-  { name: '跳绳', type: '有氧', duration: '15分钟', calories: 180 },
-  { name: '波比跳', type: 'HIIT', duration: '12分钟', calories: 150, sets: 5, reps: 10 },
-  { name: '开合跳', type: 'HIIT', duration: '10分钟', calories: 120, sets: 4, reps: 30 },
-  { name: '俯卧撑', type: '胸部', duration: '10分钟', calories: 80, sets: 3, reps: 12 },
-  { name: '深蹲', type: '腿部', duration: '15分钟', calories: 100, sets: 4, reps: 15 },
-  { name: '平板支撑', type: '核心', duration: '8分钟', calories: 60, sets: 3, reps: 60 },
-  { name: '卷腹', type: '核心', duration: '10分钟', calories: 70, sets: 3, reps: 20 }
-]
-
 // 计划列表
 const plans = ref([])
 
@@ -677,7 +546,11 @@ async function loadPlanList() {
               totalTasks: Number(p.totalTasks) || 0,
               completedTasks: Number(p.completedTasks) || 0,
               weeklySchedule: Array.isArray(p.weeklySchedule) ? p.weeklySchedule : [],
-              totalCalories: Number(p.totalCalories) || 0
+              totalCalories: Number(p.totalCalories) || 0,
+              plannedCalories: Number(p.plannedCalories) || 0,
+              totalDuration: Number(p.totalDuration) || 0,
+              completedDuration: Number(p.completedDuration) || 0,
+              trainingDays: Number(p.trainingDays) || 0,
             }
           } catch {
             logger.error('Plan', '解析计划数据失败')
@@ -718,16 +591,6 @@ onMounted(() => {
   loadOverview()
   loadPlanList()
   loadTodayTasks()
-})
-
-const stats = computed(() => {
-  return {
-    completed: overviewStats.value.completedTasks,
-    total: overviewStats.value.totalTasks,
-    totalDuration: overviewStats.value.totalDuration,
-    totalCalories: overviewStats.value.totalCalories,
-    planCount: overviewStats.value.planCount
-  }
 })
 
 function getTodayMeta() {
@@ -787,13 +650,55 @@ const todayTasksComputed = computed(() => {
   return buildTodayTasksFromPlans()
 })
 
+function getTaskDurationMinutes(task) {
+  if (task.durationMinutes != null && Number(task.durationMinutes) > 0) {
+    return Number(task.durationMinutes)
+  }
+  if (typeof task.duration === 'number' && task.duration > 0) {
+    return task.duration
+  }
+  if (typeof task.duration === 'string') {
+    const match = task.duration.match(/\d+/)
+    return match ? Number(match[0]) : 0
+  }
+  return 0
+}
+
+function summarizeTasks(tasks = []) {
+  const completed = tasks.filter(t => t.isCompleted || t.completed)
+  const totalDuration = tasks.reduce((sum, t) => sum + getTaskDurationMinutes(t), 0)
+  const totalCalories = tasks.reduce((sum, t) => sum + Number(t.calories || 0), 0)
+  const completedDuration = completed.reduce((sum, t) => sum + getTaskDurationMinutes(t), 0)
+  const completedCalories = completed.reduce((sum, t) => sum + Number(t.calories || 0), 0)
+  const progress = tasks.length ? Math.round((completed.length / tasks.length) * 100) : 0
+  return { totalDuration, totalCalories, completedDuration, completedCalories, progress }
+}
+
+const stats = computed(() => {
+  const tasks = todayTasksComputed.value
+  if (tasks.length > 0) {
+    const completed = tasks.filter(t => t.isCompleted || t.completed)
+    return {
+      completed: completed.length,
+      total: tasks.length,
+      totalDuration: completed.reduce((sum, t) => sum + getTaskDurationMinutes(t), 0),
+      totalCalories: completed.reduce((sum, t) => sum + Number(t.calories || 0), 0),
+      planCount: overviewStats.value.planCount,
+    }
+  }
+
+  return {
+    completed: overviewStats.value.completedTasks,
+    total: overviewStats.value.totalTasks,
+    totalDuration: overviewStats.value.totalDuration,
+    totalCalories: overviewStats.value.totalCalories,
+    planCount: overviewStats.value.planCount,
+  }
+})
+
 const canGenerateAI = computed(() => {
   // 只需要目标、水平和训练天数，日期可选
   return aiForm.value.goal && aiForm.value.level && aiForm.value.trainingDays.length > 0
-})
-
-const canSaveManual = computed(() => {
-  return manualForm.value.name && manualTasks.value.length > 0 && manualForm.value.startDate && manualForm.value.endDate
 })
 
 const switchToTodayTab = async () => {
@@ -809,7 +714,13 @@ const isPlanEnded = (plan) => {
 }
 
 const getPlanCalories = (plan) => {
-  return plan.tasks.reduce((sum, t) => sum + t.calories, 0)
+  if (plan.plannedCalories != null && plan.plannedCalories > 0) {
+    return plan.plannedCalories
+  }
+  if (plan.totalCalories != null && plan.totalCalories > 0) {
+    return plan.totalCalories
+  }
+  return (plan.tasks || []).reduce((sum, t) => sum + Number(t.calories || 0), 0)
 }
 
 // 直接使用后端返回的进度数据
@@ -849,15 +760,15 @@ const toggleTaskComplete = async (task) => {
     todayTask.completed = newCompleted
   }
 
-  // 更新概览统计
-  if (newCompleted) {
-    overviewStats.value.completedTasks++
-  } else {
-    overviewStats.value.completedTasks--
-  }
-
   try {
     await completeTodayTask(task.id, { isCompleted: newCompleted })
+    await Promise.all([loadPlanList(), loadOverview()])
+    if (showPlanDetail.value && selectedPlan.value && !String(selectedPlan.value.id).startsWith('ai-')) {
+      const res = await getPlanDetail(selectedPlan.value.id)
+      if (res.code === 200 && res.data) {
+        selectedPlan.value = res.data
+      }
+    }
   } catch {
     logger.error('Plan', '更新任务状态失败')
     // 回滚UI
@@ -866,12 +777,6 @@ const toggleTaskComplete = async (task) => {
     if (todayTask) {
       todayTask.isCompleted = currentCompleted
       todayTask.completed = currentCompleted
-    }
-    // 回滚统计
-    if (newCompleted) {
-      overviewStats.value.completedTasks--
-    } else {
-      overviewStats.value.completedTasks++
     }
     showError('更新任务状态失败')
   }
@@ -1056,27 +961,30 @@ const generateAIPlan = async () => {
           })
 
           if (trainingDaysSet.has(dayName) && dayData) {
-            // 训练日
+            const dayTasks = (dayData.exercises || []).map((ex, exIdx) => {
+              const durationMinutes = ex.duration_minutes || ex.durationMinutes || ex.duration || 0
+              return {
+                id: `ai-${Date.now()}-${i}-${exIdx}`,
+                name: ex.name,
+                type: ex.type || '综合',
+                duration: ex.duration_str || (durationMinutes ? `${durationMinutes}分钟` : ''),
+                durationMinutes,
+                calories: ex.calories || 0,
+                sets: ex.sets,
+                reps: ex.reps,
+                rest: ex.rest,
+                isCompleted: false
+              }
+            })
+            const dayStats = summarizeTasks(dayTasks)
             currentWeek.push({
               date: dateKey,
               day: dayName,
               dayOfWeek: dayName,
               isRestDay: false,
               exercises: dayData.exercises || [],
-              tasks: (dayData.exercises || []).map((ex, exIdx) => ({
-                id: `ai-${Date.now()}-${i}-${exIdx}`,
-                name: ex.name,
-                type: ex.type || '综合',
-                duration: ex.duration || 30,
-                durationMinutes: ex.duration || 30,
-                calories: ex.calories || 0,
-                sets: ex.sets,
-                reps: ex.reps,
-                rest: ex.rest,
-                isCompleted: false
-              })),
-              totalDuration: dayData.estimated_calories || 0,
-              totalCalories: dayData.estimated_calories || 0
+              tasks: dayTasks,
+              ...dayStats,
             })
           } else {
             // 休息日
@@ -1126,7 +1034,10 @@ const generateAIPlan = async () => {
         tasks: tasks,
         weeklySchedule: weeklySchedule,
         totalTasks: tasks.length,
-        totalCalories: tasks.reduce((sum, t) => sum + (t.calories || 0), 0)
+        plannedCalories: tasks.reduce((sum, t) => sum + Number(t.calories || 0), 0),
+        totalCalories: tasks.reduce((sum, t) => sum + Number(t.calories || 0), 0),
+        totalDuration: tasks.reduce((sum, t) => sum + getTaskDurationMinutes(t), 0),
+        trainingDays: weeklySchedule.reduce((sum, week) => sum + (week.trainingDays || 0), 0),
       }
 
       plans.value.unshift(newPlan)
@@ -1147,87 +1058,14 @@ const generateAIPlan = async () => {
 
       showSuccess('AI计划生成成功！')
 
-      // 生成后立即同步后端“今日任务”，避免页面仍显示空列表
-      await loadTodayTasks()
+      // 生成后立即同步后端数据，避免列表/详情统计不一致
+      await Promise.all([loadPlanList(), loadTodayTasks()])
     } else {
       throw new Error(res.message || '生成失败')
     }
   } catch (error) {
     logger.error('Plan', 'AI生成计划失败')
     showError(error.message || '生成计划失败，请重试')
-  } finally {
-    isLoading.value = false
-  }
-}
-
-const addPresetExercise = (exercise) => {
-  manualTasks.value.push({ ...exercise })
-}
-
-const removeTask = (index) => {
-  manualTasks.value.splice(index, 1)
-}
-
-const saveManualPlan = async () => {
-  if (!canSaveManual.value) {
-    showError('请填写计划名称并添加至少一个训练任务')
-    return
-  }
-
-  isLoading.value = true
-
-  try {
-    const res = await createPlan({
-      name: manualForm.value.name,
-      description: manualForm.value.description || '自定义训练计划',
-      difficulty: manualForm.value.difficulty,
-      startDate: manualForm.value.startDate,
-      endDate: manualForm.value.endDate,
-      tasks: manualTasks.value.map(t => ({
-        name: t.name,
-        type: t.type,
-        duration: t.duration,
-        durationMinutes: parseInt(t.duration) || 0,
-        calories: t.calories,
-        sets: t.sets || null,
-        reps: t.reps || null
-      }))
-    })
-
-    if (res.code === 200 && res.data) {
-      const newPlan = {
-        ...res.data,
-        id: res.data.planId
-      }
-
-      plans.value.unshift(newPlan)
-      overviewStats.value.planCount++
-
-      // 关闭弹窗（不打开详情页，直接回到列表）
-      showManualDialog.value = false
-
-      // 重置表单
-      manualForm.value = {
-        name: '',
-        description: '',
-        duration: '',
-        difficulty: '中级',
-        startDate: '',
-        endDate: ''
-      }
-      manualTasks.value = []
-
-      // 自动刷新计划列表和概览
-      await Promise.all([loadPlanList(), loadOverview()])
-
-      // 显示成功提示
-      showSuccess('计划创建成功！')
-    } else {
-      throw new Error(res.message || '创建失败')
-    }
-  } catch (error) {
-    logger.error('Plan', '创建计划失败')
-    showError(error.message || '创建计划失败，请重试')
   } finally {
     isLoading.value = false
   }

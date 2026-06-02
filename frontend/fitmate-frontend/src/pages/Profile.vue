@@ -437,6 +437,7 @@ import { useRouter } from 'vue-router'
 import { getUserProfile, updateUserProfile, updateAvatar, getUserStats, getAchievements, changePassword, deleteAccount } from '../api/user.js'
 import Dialog from '../components/Dialog.vue'
 import { clearCoachChatSession } from '../utils/coachChatStorage'
+import { compressImageFile } from '../utils/image'
 import logger from '../utils/logger'
 
 const router = useRouter()
@@ -646,21 +647,31 @@ function handleAvatarClick() {
 
 // 上传头像
 async function uploadAvatar(file) {
-  // 简单处理：将文件转为 base64
-  const reader = new FileReader()
-  reader.onload = async (e) => {
-    try {
-      const res = await updateAvatar({ avatar: e.target.result })
-      if (res.code === 200) {
-        userInfo.value.avatar = res.data.avatar
-        alert('头像更新成功')
-      }
-  } catch {
-    logger.error('Profile', '头像上传失败')
-      alert('头像上传失败')
-    }
+  if (!file.type.startsWith('image/')) {
+    alert('请选择图片文件')
+    return
   }
-  reader.readAsDataURL(file)
+  if (file.size > 5 * 1024 * 1024) {
+    alert('图片不能超过 5MB')
+    return
+  }
+
+  loading.value = true
+  try {
+    const avatar = await compressImageFile(file)
+    const res = await updateAvatar({ avatar })
+    if (res.code === 200) {
+      userInfo.value.avatar = res.data.avatar
+      alert('头像更新成功')
+    } else {
+      alert(res.message || '头像上传失败')
+    }
+  } catch (err) {
+    logger.error('Profile', '头像上传失败', err)
+    alert(err?.message || '头像上传失败')
+  } finally {
+    loading.value = false
+  }
 }
 
 // 修改密码

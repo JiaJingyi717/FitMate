@@ -30,7 +30,7 @@ describe('Analysis.vue', () => {
 
   it('初始化加载分析数据并渲染标题', async () => {
     getAnalyticsOverviewMock.mockResolvedValue({ code: 200, data: { totalDuration: 120, totalCalories: 500, trainingCount: 3, avgDuration: 40 } })
-    getCategoryDistributionMock.mockResolvedValue({ code: 200, data: [{ category: '力量', percentage: 60 }] })
+    getCategoryDistributionMock.mockResolvedValue({ code: 200, data: [{ name: '力量', percentage: 60 }] })
     getDurationTrendMock.mockResolvedValue({ code: 200, data: [{ date: '04-01', duration: 40 }] })
     getAiSuggestionsMock.mockResolvedValue({ code: 200, data: ['保持训练'] })
     analyzeProgressMock.mockResolvedValue({ code: 200, data: { analysis: { summary: '状态不错' } } })
@@ -111,9 +111,9 @@ describe('Analysis.vue', () => {
     getCategoryDistributionMock.mockResolvedValue({
       code: 200,
       data: [
-        { category: '力量训练', percentage: 50, color: '#2563eb' },
-        { category: '有氧运动', percentage: 30, color: '#06b6d4' },
-        { category: '拉伸放松', percentage: 20, color: '#10b981' },
+        { name: '力量训练', value: 60, percentage: 50 },
+        { name: '有氧运动', value: 36, percentage: 30 },
+        { name: '拉伸放松', value: 24, percentage: 20 },
       ],
     })
     getDurationTrendMock.mockResolvedValue({ code: 200, data: [] })
