@@ -23,7 +23,7 @@ def _sqlite_add_column(name: str, ddl: str) -> str:
 # 与 User 模型字段一致（id/username/password 假定已存在）
 _COLUMNS = [
     ("name", "VARCHAR(64) DEFAULT ''", "TEXT NOT NULL DEFAULT ''"),
-    ("avatar", "VARCHAR(255) DEFAULT ''", "TEXT NOT NULL DEFAULT ''"),
+    ("avatar", "TEXT NOT NULL", "TEXT NOT NULL DEFAULT ''"),
     ("gender", "VARCHAR(16) DEFAULT ''", "TEXT NOT NULL DEFAULT ''"),
     ("height", "FLOAT NULL", "REAL"),
     ("weight", "FLOAT NULL", "REAL"),
@@ -36,6 +36,25 @@ _COLUMNS = [
     ("join_date", "DATETIME NULL", "DATETIME"),
     ("created_at", "DATETIME NULL", "DATETIME"),
 ]
+
+
+def _migrate_avatar_to_text(dialect: str, insp) -> None:
+    """旧库 avatar 为 VARCHAR(255) 时无法存 Base64，需扩为 TEXT。"""
+    if dialect != "mysql":
+        return
+    for col in insp.get_columns("users"):
+        if col["name"] != "avatar":
+            continue
+        type_str = str(col["type"]).upper()
+        if "TEXT" in type_str or "BLOB" in type_str:
+            print("avatar 列已是 TEXT，跳过迁移")
+            return
+        stmt = "ALTER TABLE users MODIFY COLUMN avatar TEXT NOT NULL"
+        print(f"执行: {stmt}")
+        db.session.execute(text(stmt))
+        db.session.commit()
+        print("avatar 列已迁移为 TEXT")
+        return
 
 
 def main() -> None:
@@ -61,6 +80,8 @@ def main() -> None:
             db.session.execute(text(stmt))
             db.session.commit()
             print(f"已添加列: {name}")
+
+        _migrate_avatar_to_text(dialect, inspect(db.engine))
 
         # 再次检查（重新 reflect，避免缓存）
         insp2 = inspect(db.engine)

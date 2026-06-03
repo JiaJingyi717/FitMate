@@ -4,7 +4,55 @@ from models.plan import TrainingPlan
 from models.plan_task import PlanTask
 from models.record import TrainingRecord
 from services.coach_service import generate_ai_plan_content
+from utils.exercise_duration import effective_record_duration, resolve_duration_minutes, resolve_task_duration
 from utils.extensions import db
+
+
+def _serialize_plan_task(task: PlanTask) -> dict:
+    duration_minutes, duration_str = resolve_task_duration(task)
+    return {
+        "id": task.id,
+        "name": task.name,
+        "type": task.task_type,
+        "duration": duration_str,
+        "durationMinutes": duration_minutes,
+        "calories": task.calories,
+        "sets": task.sets,
+        "reps": task.reps,
+        "rest": task.rest,
+        "isCompleted": task.is_completed,
+        "planId": task.plan_id,
+    }
+
+
+def _aggregate_task_dicts(tasks: list[dict]) -> dict:
+    total_duration = sum(int(t.get("durationMinutes") or 0) for t in tasks)
+    total_calories = sum(int(t.get("calories") or 0) for t in tasks)
+    completed = [t for t in tasks if t.get("isCompleted")]
+    completed_duration = sum(int(t.get("durationMinutes") or 0) for t in completed)
+    completed_calories = sum(int(t.get("calories") or 0) for t in completed)
+    progress = int(len(completed) / len(tasks) * 100) if tasks else 0
+    return {
+        "totalDuration": total_duration,
+        "totalCalories": total_calories,
+        "completedDuration": completed_duration,
+        "completedCalories": completed_calories,
+        "progress": progress,
+    }
+
+
+def _aggregate_plan_tasks(tasks: list[PlanTask]) -> dict:
+    task_dicts = [_serialize_plan_task(t) for t in tasks]
+    stats = _aggregate_task_dicts(task_dicts)
+    training_days = len({t.target_date for t in tasks if t.target_date})
+    return {
+        **stats,
+        "plannedCalories": stats["totalCalories"],
+        "completedCalories": stats["completedCalories"],
+        "trainingDays": training_days,
+        "totalTasks": len(tasks),
+        "completedTasks": sum(1 for t in tasks if t.is_completed),
+    }
 
 
 def list_plan_overview(user_id: int):
@@ -34,7 +82,7 @@ def list_plan_overview(user_id: int):
         .filter_by(user_id=user_id, record_date=today)
         .all()
     )
-    total_duration = sum(r.duration for r in today_records)
+    total_duration = sum(effective_record_duration(r) for r in today_records)
     total_calories = sum(r.calories for r in today_records)
 
     return {
@@ -51,10 +99,10 @@ def list_training_plans(user_id: int):
     result = []
     for p in plans:
         tasks = db.session.query(PlanTask).filter_by(plan_id=p.id).all()
-        total_tasks = len(tasks)
-        completed_tasks = sum(1 for t in tasks if t.is_completed)
+        agg = _aggregate_plan_tasks(tasks)
+        total_tasks = agg["totalTasks"]
+        completed_tasks = agg["completedTasks"]
         progress = int(completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
-        total_cal = sum(t.calories for t in tasks if t.is_completed)
 
         result.append({
             "id": p.id,
@@ -69,7 +117,11 @@ def list_training_plans(user_id: int):
         "totalTasks": total_tasks,
         "completedTasks": completed_tasks,
         "progress": progress,
-        "totalCalories": total_cal,
+        "totalCalories": agg["completedCalories"],
+        "plannedCalories": agg["plannedCalories"],
+        "totalDuration": agg["totalDuration"],
+        "completedDuration": agg["completedDuration"],
+        "trainingDays": agg["trainingDays"],
         "createdAt": p.created_at.isoformat(),
     })
     return result
@@ -81,10 +133,10 @@ def get_plan_detail(plan_id: int, user_id: int):
         return None
 
     tasks = db.session.query(PlanTask).filter_by(plan_id=plan_id).all()
-    total_tasks = len(tasks)
-    completed_tasks = sum(1 for t in tasks if t.is_completed)
+    agg = _aggregate_plan_tasks(tasks)
+    total_tasks = agg["totalTasks"]
+    completed_tasks = agg["completedTasks"]
     progress = int(completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
-    total_cal = sum(t.calories for t in tasks if t.is_completed)
 
     # Python weekday(): 周一=0, 周二=1, ... , 周日=6
     week_days = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
@@ -98,17 +150,7 @@ def get_plan_detail(plan_id: int, user_id: int):
             if week_num not in task_by_week:
                 task_by_week[week_num] = []
             task_by_week[week_num].append({
-                "id": t.id,
-                "name": t.name,
-                "type": t.task_type,
-                "duration": t.duration_str or f"{t.duration}分钟",
-                "durationMinutes": t.duration,
-                "calories": t.calories,
-                "sets": t.sets,
-                "reps": t.reps,
-                "rest": t.rest,
-                "isCompleted": t.is_completed,
-                "planId": t.plan_id,
+                **_serialize_plan_task(t),
                 "target_date": t.target_date,
             })
 
@@ -128,11 +170,13 @@ def get_plan_detail(plan_id: int, user_id: int):
         week_days_list = []
         for day_idx, day_name in enumerate(week_days):
             day_tasks = days_tasks_map.get(day_name, [])
+            day_stats = _aggregate_task_dicts(day_tasks)
             week_days_list.append({
                 "date": f"W{week_num}D{day_idx + 1}",
                 "dayOfWeek": day_name,
                 "isRestDay": len(day_tasks) == 0,
                 "tasks": day_tasks,
+                **day_stats,
             })
 
         weekly_schedule.append({
@@ -156,23 +200,12 @@ def get_plan_detail(plan_id: int, user_id: int):
         "progress": progress,
         "totalTasks": total_tasks,
         "completedTasks": completed_tasks,
-        "totalCalories": total_cal,
-        "tasks": [
-            {
-                "id": t.id,
-                "name": t.name,
-                "type": t.task_type,
-                "duration": t.duration_str or f"{t.duration}分钟",
-                "durationMinutes": t.duration,
-                "calories": t.calories,
-                "sets": t.sets,
-                "reps": t.reps,
-                "rest": t.rest,
-                "isCompleted": t.is_completed,
-                "planId": t.plan_id,
-            }
-            for t in tasks
-        ],
+        "totalCalories": agg["completedCalories"],
+        "plannedCalories": agg["plannedCalories"],
+        "totalDuration": agg["totalDuration"],
+        "completedDuration": agg["completedDuration"],
+        "trainingDays": agg["trainingDays"],
+        "tasks": [_serialize_plan_task(t) for t in tasks],
         "weeklySchedule": weekly_schedule,
         "createdAt": plan.created_at.isoformat(),
     }
@@ -392,39 +425,45 @@ def list_plan_tasks(user_id: int):
         .filter(PlanTask.plan_id.in_(plan_ids), PlanTask.target_date == date.today())
         .all()
     )
-    return [
-        {
-            "id": t.id,
-            "name": t.name,
-            "type": t.task_type,
-            "duration": t.duration_str or f"{t.duration}分钟",
-            "durationMinutes": t.duration,
-            "calories": t.calories,
-            "sets": t.sets,
-            "reps": t.reps,
-            "rest": t.rest,
-            "isCompleted": t.is_completed,
-            "planId": t.plan_id,
-        }
-        for t in tasks
-    ]
+    result = []
+    for t in tasks:
+        result.append(_serialize_plan_task(t))
+    return result
 
 
 def check_in_task(user_id: int, task: PlanTask, is_completed: bool):
     task.is_completed = is_completed
     task.completed_at = datetime.now(timezone.utc) if is_completed else None
 
+    existing = TrainingRecord.query.filter_by(
+        user_id=user_id,
+        task_id=task.id,
+        record_date=date.today(),
+    ).first()
+
     record = None
+    duration_minutes, _ = resolve_task_duration(task)
     if is_completed:
-        record = TrainingRecord(
-            user_id=user_id,
-            plan_id=task.plan_id,
-            duration=task.duration,
-            exercise_type=task.task_type,
-            calories=task.calories,
-            record_date=date.today(),
-        )
-        db.session.add(record)
+        if existing:
+            existing.duration = duration_minutes
+            existing.exercise_type = task.task_type
+            existing.calories = task.calories
+            existing.plan_id = task.plan_id
+            record = existing
+        else:
+            record = TrainingRecord(
+                user_id=user_id,
+                plan_id=task.plan_id,
+                task_id=task.id,
+                duration=duration_minutes,
+                exercise_type=task.task_type,
+                calories=task.calories,
+                record_date=date.today(),
+            )
+            db.session.add(record)
+    elif existing:
+        db.session.delete(existing)
+
     db.session.commit()
     return record
 
@@ -626,17 +665,7 @@ def save_ai_plan(user_id: int, plan_data: dict, goal: str, level: str, start_dat
             exercises = day_data.get("exercises", [])
             print(f"[DEBUG] week={week_idx}, day_name={day_name}, target_date={target_date}, exercises_count={len(exercises)}")
             for ex in exercises:
-                # 处理 duration - 可能是数字或字符串
-                duration_val = ex.get("duration", 30)
-                if isinstance(duration_val, str):
-                    # 从字符串提取数字
-                    import re
-                    match = re.search(r'\d+', duration_val)
-                    duration_int = int(match.group()) if match else 30
-                    duration_str_val = duration_val
-                else:
-                    duration_int = int(duration_val) if duration_val else 30
-                    duration_str_val = f"{duration_int}分钟"
+                duration_int, duration_str_val = resolve_duration_minutes(ex)
 
                 # 处理 sets - 可能是数字
                 sets_val = ex.get("sets")
@@ -679,11 +708,13 @@ def save_ai_plan(user_id: int, plan_data: dict, goal: str, level: str, start_dat
     tasks_by_date = defaultdict(list)
     for task in created_tasks:
         date_key = task.target_date.isoformat() if task.target_date else "unknown"
+        duration_minutes, duration_str = resolve_task_duration(task)
         tasks_by_date[date_key].append({
             "name": task.name,
             "type": task.task_type,
-            "duration": task.duration,
-            "duration_str": task.duration_str or f"{task.duration}分钟",
+            "duration": duration_minutes,
+            "duration_minutes": duration_minutes,
+            "duration_str": duration_str,
             "calories": task.calories or 0,
             "sets": task.sets,
             "reps": task.reps,
@@ -704,6 +735,7 @@ def save_ai_plan(user_id: int, plan_data: dict, goal: str, level: str, start_dat
                         "date": date_key,
                         "exercises": day_exercises,
                         "estimated_calories": sum(ex.get("calories", 0) for ex in day_exercises),
+                        "total_duration_minutes": sum(ex.get("duration_minutes", 0) for ex in day_exercises),
                     })
 
     print(f"[DEBUG save_ai_plan] 返回的 weekly_schedule 条目数: {len(return_weekly_schedule)}")

@@ -21,6 +21,17 @@ class TestProfile:
         assert profile["name"] == "测试用户"
         assert profile["goal"] == "减脂"
 
+    def test_update_avatar_accepts_long_base64(self, client, auth_headers):
+        avatar = "data:image/jpeg;base64," + ("A" * 512)
+        resp = client.put(
+            "/api/users/profile/avatar",
+            headers=auth_headers,
+            json={"avatar": avatar},
+        )
+        assert resp.status_code == 200
+        assert resp.get_json()["data"]["avatar"] == avatar
+        profile = client.get("/api/users/profile", headers=auth_headers).get_json()["data"]
+        assert profile["avatar"] == avatar
 
 class TestAchievements:
     def test_get_achievements_success(self, client, auth_headers):

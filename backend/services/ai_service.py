@@ -18,7 +18,7 @@ class QwenAIClient:
 
     def __init__(self):
         self.api_key = os.getenv("QWEN_API_KEY", "")
-        self.model = os.getenv("QWEN_MODEL", "qwen3.6-flash")
+        self.model = os.getenv("QWEN_MODEL", "qwen3.5-omni-plus")
         self.api_base = os.getenv("QWEN_API_BASE", "https://dashscope.aliyuncs.com/compatible-mode/v1")
 
         if not self.api_key:
@@ -29,6 +29,8 @@ class QwenAIClient:
         messages: List[Dict[str, str]],
         temperature: float = 0.7,
         max_tokens: int = 2000,
+        timeout: int = 60,
+        enable_thinking: bool = False,
     ) -> Dict[str, Any]:
         """
         发送对话请求到通义千问
@@ -51,10 +53,11 @@ class QwenAIClient:
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
+            "enable_thinking": enable_thinking,
         }
 
         try:
-            response = requests.post(url, headers=headers, json=payload, timeout=60)
+            response = requests.post(url, headers=headers, json=payload, timeout=timeout)
             response.raise_for_status()
             result = response.json()
 
@@ -65,6 +68,15 @@ class QwenAIClient:
             }
         except requests.exceptions.Timeout:
             raise TimeoutError("🤖 AI 服务响应超时，请稍后重试")
+        except requests.exceptions.HTTPError as e:
+            detail = ""
+            if e.response is not None:
+                try:
+                    detail = e.response.json().get("error", {}).get("message", "")
+                except Exception:
+                    detail = (e.response.text or "")[:200]
+            hint = detail or str(e)
+            raise ConnectionError(f"🤖 AI 服务请求失败: {hint}")
         except requests.exceptions.RequestException as e:
             raise ConnectionError(f"🤖 AI 服务连接失败: {str(e)}")
         except (KeyError, IndexError, TypeError) as e:
@@ -107,7 +119,7 @@ class QwenAIClient:
                     "sets": 组数,
                     "reps": "次数（如：12-15 或 30秒）",
                     "rest": "休息时间",
-                    "duration": "单组时长（分钟）",
+                    "duration_minutes": 该动作总预估时长（分钟，整数，至少1）,
                     "calories": 预估消耗卡路里,
                     "description": "动作要点"
                 }
@@ -126,12 +138,13 @@ class QwenAIClient:
 2. 每周训练日的 day 字段必须严格等于用户指定的训练日，不要生成其他日期
 3. 动作要科学，考虑用户的身体限制
 4. 热量消耗估算要合理
-5. 如果用户指定了训练日（如：周一、周三、周六），weekly_schedule 中只能包含这些日期，每周的 day 字段要与用户指定一致
-6. 必须根据用户 level 生成不同强度处方，严格遵守以下规则：
+5. 每个 exercise 必须填写 duration_minutes（整项动作总时长，单位分钟，至少 1）；力量动作可按「组数×次数×约3秒+组间休息」估算，静态支撑按「组数×秒数」换算成分钟
+6. 如果用户指定了训练日（如：周一、周三、周六），weekly_schedule 中只能包含这些日期，每周的 day 字段要与用户指定一致
+7. 必须根据用户 level 生成不同强度处方，严格遵守以下规则：
    - 初学者：基础动作为主，避免高难复合动作；每个动作 2-3 组，8-12 次，休息 60-90 秒
    - 有基础：中等难度，加入复合动作；每个动作 3-4 组，10-15 次，休息 45-75 秒
    - 健身达人：高阶动作和更高训练密度；每个动作 4-6 组，6-15 次，休息 30-60 秒
-7. 同一个计划内，不同训练日的内容必须有明显区别（例如推/拉/腿/核心分化），不能每天重复相同动作列表"""
+8. 同一个计划内，不同训练日的内容必须有明显区别（例如推/拉/腿/核心分化），不能每天重复相同动作列表"""
 
         user_message = f"""请为以下用户生成训练计划：
 
@@ -153,7 +166,13 @@ class QwenAIClient:
             {"role": "user", "content": user_message},
         ]
 
-        result = self.chat(messages, temperature=0.7, max_tokens=3000)
+        result = self.chat(
+            messages,
+            temperature=0.7,
+            max_tokens=3000,
+            timeout=90,
+            enable_thinking=False,
+        )
 
         # 尝试解析 JSON
         content = result["content"].strip()
@@ -168,6 +187,17 @@ class QwenAIClient:
 
         try:
             plan_data = json.loads(content.strip())
+            from utils.exercise_duration import resolve_duration_minutes
+
+            for day in plan_data.get("weekly_schedule", []):
+                for ex in day.get("exercises", []):
+                    minutes, duration_str = resolve_duration_minutes(ex)
+                    ex["duration_minutes"] = minutes
+                    ex["duration"] = minutes
+                    ex["duration_str"] = duration_str
+                day["total_duration_minutes"] = day.get("total_duration_minutes") or sum(
+                    ex.get("duration_minutes", 0) for ex in day.get("exercises", [])
+                )
             return {
                 "success": True,
                 "plan": plan_data,
