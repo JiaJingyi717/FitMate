@@ -72,7 +72,7 @@ FitMate — AI 智能健身助手
 | `FITMATE_AI_PLAN_FALLBACK` | 计划生成降级（默认开启） |
 | `FITMATE_AI_CHAT_FALLBACK` | 教练对话降级（默认开启） |
 
-示例见根目录 `.env.example` 与 `backend/.env.example`。**勿将含密钥的 `.env` 提交到 Git。**
+示例见根目录 `.env.example` 与 `backend/.env.example`。
 
 ## 七、Docker 部署
 
@@ -135,35 +135,4 @@ curl -s http://127.0.0.1/health
 
 > **注意**：更新时先备份 `.env` 与 `secrets/`，在备份基础上追加新变量，不要只保留 QWEN 几行导致数据库密码丢失。
 
-服务器也可使用 `scripts/cloud-update.sh`（git pull 或 GHCR 拉镜像）。完整说明见 `docs/report.md` 第十二、十三章。
-
-## 九、常见问题
-
-**登录 500 / `Access denied for user 'root'`**  
-MySQL 数据卷密码与 `.env` 中 `MYSQL_ROOT_PASSWORD` 不一致。恢复备份的 `.env`，勿随意 `docker compose down -v`（会清空用户数据）。
-
-**AI 503 / 超时**  
-检查 `QWEN_API_KEY` 与网络；确认已配置 `QWEN_CHAT_MODEL=qwen-plus`、`QWEN_CHAT_TIMEOUT=120` 并重建 backend 容器。降级开启时仍可获得本地模板回复。
-
-**成就全部未解锁**  
-需部署含 `achievement_service` 的后端；打开个人中心或打卡后会自动 sync 解锁。
-
-**CI 徽章 failing**  
-查看 [Actions](https://github.com/JiaJingyi717/FitMate/actions) 中 `ci.yml` 最新日志，常见为 ruff 或测试失败。
-
-**拉取 `python:3.12-slim` 失败**  
-使用国内镜像拉取后打标签，或 `DOCKER_BUILDKIT=0 docker compose build backend`。
-
-**backend unhealthy / 缺表**  
-`docker compose restart backend`；完全重置：`docker compose down -v` 后重新 `up`（清空数据）。
-
-## 十、文档
-
-| 文档 | 说明 |
-| ---- | ---- |
-| `docs/report.md` | 课程最终报告（架构、部署、测试、监控等） |
-| `docs/contribution/` | 各模块个人贡献说明 |
-| `CLAUDE.md` | 项目开发规范 |
-| `backend/AI_API_DOC.md` | AI 接口文档 |
-=======
-4. 镜像构建与推送：`.github/workflows/docker.yml`（推送到 GHCR）。
+服务器也可使用 `scripts/cloud-update.sh`（git pull 或 GHCR 拉镜像）。
