@@ -165,3 +165,5 @@ MySQL 数据卷密码与 `.env` 中 `MYSQL_ROOT_PASSWORD` 不一致。恢复备�
 | `docs/contribution/` | 各模块个人贡献说明 |
 | `CLAUDE.md` | 项目开发规范 |
 | `backend/AI_API_DOC.md` | AI 接口文档 |
+=======
+4. 镜像构建与推送：`.github/workflows/docker.yml`（推送到 GHCR）。
