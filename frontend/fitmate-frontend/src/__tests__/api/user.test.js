@@ -42,6 +42,7 @@ describe('api/user.js', () => {
       url: '/api/users/profile/avatar',
       method: 'put',
       data: { avatar: 'base64' },
+      timeout: 30000,
     })
     expect(request).toHaveBeenNthCalledWith(3, {
       url: '/api/users/password/change',
