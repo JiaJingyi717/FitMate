@@ -17,10 +17,10 @@ on:
 
 jobs:
   deploy:
-    if: ${{ secrets.DEPLOY_HOST != '' && secrets.DEPLOY_SSH_KEY != '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Deploy via SSH
+        if: ${{ secrets.DEPLOY_HOST != '' && secrets.DEPLOY_SSH_KEY != '' }}
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.DEPLOY_HOST }}
