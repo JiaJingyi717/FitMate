@@ -51,6 +51,40 @@ class TestPlanDetail:
         resp = client.get("/api/plans/9999", headers=auth_headers)
         assert resp.status_code == 404
 
+    def test_plan_list_and_detail_include_duration_stats(self, client, auth_headers):
+        create = client.post("/api/plans", headers=auth_headers, json={"name": "统计测试"})
+        plan_id = create.get_json()["data"]["planId"]
+        client.post(
+            f"/api/plans/{plan_id}/tasks",
+            headers=auth_headers,
+            json={"task": {"name": "深蹲", "type": "力量", "durationMinutes": 5, "calories": 40, "sets": 3, "reps": "10"}},
+        )
+        client.post(
+            f"/api/plans/{plan_id}/tasks",
+            headers=auth_headers,
+            json={"task": {"name": "平板支撑", "type": "核心", "durationMinutes": 3, "calories": 15, "sets": 3, "reps": "45秒"}},
+        )
+
+        list_resp = client.get("/api/plans", headers=auth_headers)
+        plan_item = next(item for item in list_resp.get_json()["data"] if item["id"] == plan_id)
+        assert plan_item["totalDuration"] == 8
+        assert plan_item["plannedCalories"] == 55
+        assert plan_item["totalTasks"] == 2
+
+        detail_resp = client.get(f"/api/plans/{plan_id}", headers=auth_headers)
+        detail = detail_resp.get_json()["data"]
+        assert detail["totalDuration"] == 8
+        assert detail["plannedCalories"] == 55
+        assert detail["weeklySchedule"]
+        training_day = next(
+            day
+            for week in detail["weeklySchedule"]
+            for day in week["days"]
+            if not day["isRestDay"] and day["tasks"]
+        )
+        assert training_day["totalDuration"] == 8
+        assert training_day["totalCalories"] == 55
+
 
 class TestPlanAiGenerate:
     def test_ai_generate(self, client, auth_headers):
@@ -112,6 +146,28 @@ class TestTodayTasks:
         )
         assert undo.status_code == 200
 
+    def test_complete_task_does_not_duplicate_records(self, client, auth_headers):
+        from models.record import TrainingRecord
+
+        create = client.post("/api/plans", headers=auth_headers, json={"name": "重复打卡测试"})
+        plan_id = create.get_json()["data"]["planId"]
+        add_task = client.post(
+            f"/api/plans/{plan_id}/tasks",
+            headers=auth_headers,
+            json={"task": {"name": "平板支撑", "type": "核心", "durationMinutes": 1, "calories": 8}},
+        )
+        task_id = add_task.get_json()["data"]["taskId"]
+
+        for _ in range(3):
+            resp = client.patch(
+                f"/api/plans/today/{task_id}/complete",
+                headers=auth_headers,
+                json={"isCompleted": True},
+            )
+            assert resp.status_code == 200
+
+        count = TrainingRecord.query.filter_by(task_id=task_id).count()
+        assert count == 1
 
 class TestPlanTaskOps:
     def test_add_remove_task_route(self, client, auth_headers):

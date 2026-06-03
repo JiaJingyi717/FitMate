@@ -114,7 +114,7 @@
             >
               <span class="legend-color" :style="{ background: item.color }"></span>
               <span class="legend-name">{{ item.name }}</span>
-              <span class="legend-value">{{ item.value }}%</span>
+              <span class="legend-value">{{ item.duration }}分钟 · {{ item.value }}%</span>
             </div>
           </div>
         </div>
@@ -348,8 +348,9 @@ const loadData = async () => {
     if (categoryRes.code === 200 && categoryRes.data) {
       categoryData.value = categoryRes.data.map((item, index) => ({
         id: `cat-${index}`,
-        name: item.category,
-        value: item.percentage,
+        name: item.name || item.category || '未知',
+        value: item.percentage ?? 0,
+        duration: item.value ?? 0,
         color: colorMap[index % colorMap.length]
       }))
     }

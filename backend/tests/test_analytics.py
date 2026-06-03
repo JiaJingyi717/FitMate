@@ -20,10 +20,35 @@ class TestAnalyticsOverview:
 
 class TestCategoryDistribution:
     def test_category_success(self, client, auth_headers):
+        from datetime import date
+
+        from models.record import TrainingRecord
+        from utils.extensions import db
+
+        login = client.post("/api/auth/login", json={"email": "test@test.com", "password": "password123"})
+        user_id = login.get_json()["data"]["userId"]
+        db.session.add(TrainingRecord(
+            user_id=user_id,
+            duration=4,
+            exercise_type="力量",
+            calories=27,
+            record_date=date.today(),
+        ))
+        db.session.add(TrainingRecord(
+            user_id=user_id,
+            duration=1,
+            exercise_type="有氧",
+            calories=20,
+            record_date=date.today(),
+        ))
+        db.session.commit()
+
         resp = client.get("/api/analytics/category-distribution", headers=auth_headers)
         assert resp.status_code == 200
-        assert isinstance(resp.get_json()["data"], list)
-
+        items = resp.get_json()["data"]
+        assert isinstance(items, list)
+        assert any(item["name"] == "力量" for item in items)
+        assert any(item["name"] == "有氧" for item in items)
 
 class TestDurationTrend:
     def test_trend_success(self, client, auth_headers):

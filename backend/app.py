@@ -217,6 +217,8 @@ def create_app():
             safe_add_column_if_missing("users", "coach_gender", "VARCHAR(16) NULL")
             safe_add_column_if_missing("users", "coach_personality", "VARCHAR(32) NULL")
             safe_add_column_if_missing("users", "join_date", "DATETIME NULL")
+            # 头像存 Base64，旧库 VARCHAR(255) 会写入失败
+            safe_modify_column_type("users", "avatar", "TEXT NOT NULL")
 
             safe_add_column_if_missing("training_plan", "plan_type", "VARCHAR(32) DEFAULT '手动创建'")
             safe_add_column_if_missing("training_plan", "difficulty", "VARCHAR(16) DEFAULT '中级'")
@@ -245,6 +247,7 @@ def create_app():
             safe_add_column_if_missing("coaches", "personality", "VARCHAR(32) DEFAULT 'gentle'")
 
             safe_add_column_if_missing("training_record", "calories", "INT DEFAULT 0")
+            safe_add_column_if_missing("training_record", "task_id", "BIGINT NULL")
 
             safe_add_column_if_missing("achievements", "achievement_name", "VARCHAR(128) NOT NULL")
 

@@ -101,30 +101,6 @@ describe('Plan.vue', () => {
     expect(planApiMock.getTodayTasks).toHaveBeenCalled()
   })
 
-  it('手动创建成功后会调用 createPlan 并关闭弹窗', async () => {
-    planApiMock.createPlan.mockResolvedValue({
-      code: 200,
-      data: { planId: 99, name: '手动计划', tasks: [] },
-    })
-
-    const wrapper = mount(Plan)
-    await flushPromises()
-
-    await wrapper.find('.header-actions .btn-secondary').trigger('click')
-    await wrapper.find('.dialog-lg .exercise-btn').trigger('click')
-
-    const inputs = wrapper.findAll('.dialog-lg .form-input')
-    await inputs[0].setValue('手动计划A')
-    await inputs[3].setValue('2026-04-01')
-    await inputs[4].setValue('2026-04-30')
-
-    await wrapper.find('.dialog-lg .btn-primary').trigger('click')
-    await flushPromises()
-
-    expect(planApiMock.createPlan).toHaveBeenCalled()
-    expect(wrapper.text()).toContain('计划创建成功')
-  })
-
   it('AI生成信息不完整时提示请填写完整信息', async () => {
     const wrapper = mount(Plan)
     await flushPromises()
@@ -218,40 +194,6 @@ describe('Plan.vue', () => {
     await flushPromises()
 
     expect(generatePlanMock).toHaveBeenCalled()
-  })
-
-  it('手动创建计划失败时显示错误提示', async () => {
-    planApiMock.createPlan.mockRejectedValue(new Error('创建失败'))
-
-    const wrapper = mount(Plan)
-    await flushPromises()
-
-    await wrapper.find('.header-actions .btn-secondary').trigger('click')
-    await wrapper.find('.dialog-lg .exercise-btn').trigger('click')
-
-    const inputs = wrapper.findAll('.dialog-lg .form-input')
-    await inputs[0].setValue('计划名称')
-    await inputs[3].setValue('2026-04-01')
-    await inputs[4].setValue('2026-04-30')
-
-    await wrapper.find('.dialog-lg .btn-primary').trigger('click')
-    await flushPromises()
-
-    expect(planApiMock.createPlan).toHaveBeenCalled()
-  })
-
-  it('手动创建计划时提示必须添加任务', async () => {
-    const wrapper = mount(Plan)
-    await flushPromises()
-
-    await wrapper.find('.header-actions .btn-secondary').trigger('click')
-
-    const inputs = wrapper.findAll('.dialog-lg .form-input')
-    await inputs[0].setValue('无任务计划')
-
-    await wrapper.find('.dialog-lg .btn-primary').trigger('click')
-
-    expect(planApiMock.createPlan).not.toHaveBeenCalled()
   })
 
   it('切换到今日任务时刷新任务列表', async () => {

@@ -115,7 +115,7 @@ service.interceptors.response.use(
         case 502:
         case 503:
         case 504:
-          message = '服务暂不可用，请稍后重试'
+          message = error.response.data?.message || '服务暂不可用，请稍后重试'
           break
         default:
           message = error.response.data?.message || '请求失败'
