@@ -1,5 +1,9 @@
 """个人中心模块 API 测试（profile/achievements/password/account）。"""
 
+from datetime import date
+
+from utils.extensions import db
+
 
 class TestProfile:
     def test_get_profile_success(self, client, auth_headers):
@@ -38,6 +42,52 @@ class TestAchievements:
         resp = client.get("/api/users/achievements", headers=auth_headers)
         assert resp.status_code == 200
         assert isinstance(resp.get_json()["data"], list)
+
+    def test_achievements_unlock_after_check_in(self, client, auth_headers, app):
+        from models.plan import TrainingPlan
+        from models.plan_task import PlanTask
+        from models.user import User
+
+        with app.app_context():
+            user = User.query.filter_by(email="test@test.com").first()
+            user_id = user.id
+            plan = TrainingPlan.query.filter_by(user_id=user_id).first()
+            if not plan:
+                plan = TrainingPlan(
+                    user_id=user_id,
+                    name="测试计划",
+                    plan_type="手动",
+                    difficulty="初级",
+                    duration_str="1周",
+                    status="todo",
+                )
+                db.session.add(plan)
+                db.session.flush()
+            task = PlanTask(
+                plan_id=plan.id,
+                name="测试任务",
+                task_type="力量",
+                duration=20,
+                duration_str="20分钟",
+                calories=100,
+                target_date=date.today(),
+            )
+            db.session.add(task)
+            db.session.commit()
+            task_id = task.id
+
+        complete = client.patch(
+            f"/api/plans/today/{task_id}/complete",
+            headers=auth_headers,
+            json={"completed": True},
+        )
+        assert complete.status_code == 200
+
+        resp = client.get("/api/users/achievements", headers=auth_headers)
+        data = resp.get_json()["data"]
+        first = next((a for a in data if a["name"] == "初出茅庐"), None)
+        assert first is not None
+        assert first["isEarned"] is True
 
 
 class TestPassword:

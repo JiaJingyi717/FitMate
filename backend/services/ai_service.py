@@ -6,8 +6,10 @@
 import os
 import json
 import requests
+from requests.adapters import HTTPAdapter
 from typing import Dict, Any, List
 from dotenv import load_dotenv
+from urllib3.util.retry import Retry
 
 # 加载 .env 文件
 load_dotenv()
@@ -19,10 +21,36 @@ class QwenAIClient:
     def __init__(self):
         self.api_key = os.getenv("QWEN_API_KEY", "")
         self.model = os.getenv("QWEN_MODEL", "qwen3.5-omni-plus")
+        # 计划生成默认用纯文本模型，比 omni-plus 更快、更稳
+        self.plan_model = os.getenv("QWEN_PLAN_MODEL", "qwen-plus")
+        self.plan_timeout = int(os.getenv("QWEN_PLAN_TIMEOUT", "180"))
+        # 教练对话默认用纯文本模型，比 omni-plus 更快、更稳
+        self.chat_model = os.getenv("QWEN_CHAT_MODEL", "qwen-plus")
+        self.chat_timeout = int(os.getenv("QWEN_CHAT_TIMEOUT", "120"))
         self.api_base = os.getenv("QWEN_API_BASE", "https://dashscope.aliyuncs.com/compatible-mode/v1")
 
         if not self.api_key:
             raise ValueError("⚠️ 未配置 QWEN_API_KEY，请在 .env 文件中配置")
+
+    def _post_with_retry(self, url: str, headers: dict, payload: dict, timeout: int):
+        session = requests.Session()
+        # 仅对 HTTP 502/503/504 重试；SSL/网络断开不重试，避免白等 90+ 秒
+        retry = Retry(
+            total=1,
+            connect=0,
+            read=0,
+            backoff_factor=0.5,
+            status_forcelist=(502, 503, 504),
+            allowed_methods=["POST"],
+        )
+        session.mount("https://", HTTPAdapter(max_retries=retry))
+        connect_timeout = min(15, max(5, timeout // 6))
+        return session.post(
+            url,
+            headers=headers,
+            json=payload,
+            timeout=(connect_timeout, timeout),
+        )
 
     def chat(
         self,
@@ -31,6 +59,7 @@ class QwenAIClient:
         max_tokens: int = 2000,
         timeout: int = 60,
         enable_thinking: bool = False,
+        model: str | None = None,
     ) -> Dict[str, Any]:
         """
         发送对话请求到通义千问
@@ -49,7 +78,7 @@ class QwenAIClient:
             "Authorization": f"Bearer {self.api_key}",
         }
         payload = {
-            "model": self.model,
+            "model": model or self.model,
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
@@ -57,17 +86,20 @@ class QwenAIClient:
         }
 
         try:
-            response = requests.post(url, headers=headers, json=payload, timeout=timeout)
+            response = self._post_with_retry(url, headers, payload, timeout)
             response.raise_for_status()
             result = response.json()
 
             return {
                 "content": result["choices"][0]["message"]["content"],
                 "usage": result.get("usage", {}),
-                "model": result.get("model", self.model),
+                "model": result.get("model", model or self.model),
             }
         except requests.exceptions.Timeout:
-            raise TimeoutError("🤖 AI 服务响应超时，请稍后重试")
+            raise TimeoutError(
+                "🤖 AI 服务响应超时（与免费额度无关），请稍后重试；"
+                "若持续失败可在 .env 设置 QWEN_PLAN_MODEL=qwen-plus 或 qwen-turbo"
+            )
         except requests.exceptions.HTTPError as e:
             detail = ""
             if e.response is not None:
@@ -78,7 +110,13 @@ class QwenAIClient:
             hint = detail or str(e)
             raise ConnectionError(f"🤖 AI 服务请求失败: {hint}")
         except requests.exceptions.RequestException as e:
-            raise ConnectionError(f"🤖 AI 服务连接失败: {str(e)}")
+            err = str(e)
+            if "SSLError" in err or "SSL" in err:
+                raise ConnectionError(
+                    "🤖 无法连接阿里云 DashScope（SSL/网络异常，与额度无关）。"
+                    "请检查网络/代理，或稍后重试；系统可自动使用本地模板生成计划。"
+                )
+            raise ConnectionError(f"🤖 AI 服务连接失败: {err}")
         except (KeyError, IndexError, TypeError) as e:
             raise ValueError(f"🤖 AI 响应格式异常: {str(e)}")
 
@@ -140,11 +178,14 @@ class QwenAIClient:
 4. 热量消耗估算要合理
 5. 每个 exercise 必须填写 duration_minutes（整项动作总时长，单位分钟，至少 1）；力量动作可按「组数×次数×约3秒+组间休息」估算，静态支撑按「组数×秒数」换算成分钟
 6. 如果用户指定了训练日（如：周一、周三、周六），weekly_schedule 中只能包含这些日期，每周的 day 字段要与用户指定一致
-7. 必须根据用户 level 生成不同强度处方，严格遵守以下规则：
+7. weekly_schedule 只需输出**一个标准训练周**的模板（每个训练日一条），系统会按周重复至计划结束；不同周可在 focus 上略有递进说明，但 day 集合必须一致
+8. duration_weeks 必须等于用户指定的计划总周数
+9. 必须根据用户 level 生成不同强度处方，严格遵守以下规则：
    - 初学者：基础动作为主，避免高难复合动作；每个动作 2-3 组，8-12 次，休息 60-90 秒
    - 有基础：中等难度，加入复合动作；每个动作 3-4 组，10-15 次，休息 45-75 秒
    - 健身达人：高阶动作和更高训练密度；每个动作 4-6 组，6-15 次，休息 30-60 秒
-8. 同一个计划内，不同训练日的内容必须有明显区别（例如推/拉/腿/核心分化），不能每天重复相同动作列表"""
+10. 同一个计划内，不同训练日的内容必须有明显区别（例如推/拉/腿/核心分化），不能每天重复相同动作列表
+11. 每个训练日 4-6 个动作即可，JSON 尽量简洁，不要输出多余字段"""
 
         user_message = f"""请为以下用户生成训练计划：
 
@@ -152,12 +193,14 @@ class QwenAIClient:
 运动水平：{user_profile.get('level', '有基础')}
 每周训练天数：{user_profile.get('days_per_week', 4)} 天
 用户指定的训练日（严格遵守！）：{user_profile.get('training_days', '周一、周三、周五')}
-计划时长：{user_profile.get('duration', 4)} 周
+计划开始日期：{user_profile.get('start_date') or '未指定'}
+计划结束日期：{user_profile.get('end_date') or '未指定'}
+计划总时长：{user_profile.get('duration', 4)} 周（duration_weeks 必须等于此值）
 用户偏好：{user_profile.get('preferences', '无特殊偏好')}
 身体限制：{user_profile.get('restrictions', '无')}
 额外需求：{user_profile.get('notes', '')}
 
-【重要】weekly_schedule 数组中的每个对象的 "day" 字段必须严格等于以下日期之一：{user_profile.get('training_days', '周一、周三、周五')}。不要生成任何其他日期（如周二、周五等）的训练内容。"""
+【重要】weekly_schedule 数组中的每个对象的 "day" 字段必须严格等于以下日期之一：{user_profile.get('training_days', '周一、周三、周五')}。不要生成任何其他日期（如周二、周五等）的训练内容。只需生成一个标准训练周模板，系统将按 {user_profile.get('duration', 4)} 周重复应用。"""
 
         print(f"[DEBUG] 发送给AI的user_message:\n{user_message}")
 
@@ -168,10 +211,11 @@ class QwenAIClient:
 
         result = self.chat(
             messages,
-            temperature=0.7,
-            max_tokens=3000,
-            timeout=90,
+            temperature=0.5,
+            max_tokens=2500,
+            timeout=self.plan_timeout,
             enable_thinking=False,
+            model=self.plan_model,
         )
 
         # 尝试解析 JSON
@@ -357,7 +401,13 @@ class QwenAIClient:
         # 添加对话历史
         full_messages.extend(messages)
 
-        result = self.chat(full_messages, temperature=0.8, max_tokens=1500)
+        result = self.chat(
+            full_messages,
+            temperature=0.8,
+            max_tokens=1500,
+            timeout=self.chat_timeout,
+            model=self.chat_model,
+        )
 
         return {
             "content": result["content"],

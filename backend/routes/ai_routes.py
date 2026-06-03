@@ -3,13 +3,48 @@ AI 智能功能路由
 包含：生成训练计划、饮食建议、AI教练、进度分析
 """
 
+import os
+
 from flask import Blueprint, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from services.ai_service import get_ai_client
 from services.coach_context_service import build_coach_user_context
+from services.coach_service import build_chat_reply
 from routes._shared import ok, fail
+from utils.plan_dates import duration_weeks_between
 
 ai_bp = Blueprint("ai", __name__)
+
+
+def _coach_personality_key(context: dict | None) -> str:
+    """将教练风格归一化为 build_chat_reply 使用的 key。"""
+    raw = (context or {}).get("coach_personality") or "gentle"
+    mapping = {
+        "温柔鼓励型": "gentle",
+        "严格激励型": "strict",
+        "严格专业型": "strict",
+        "活力四射型": "energetic",
+    }
+    return mapping.get(raw, raw if raw in ("gentle", "strict", "energetic") else "gentle")
+
+
+def _last_user_message(messages: list) -> str:
+    for item in reversed(messages):
+        if item.get("role") == "user":
+            return (item.get("content") or "").strip()
+    return ""
+
+
+def _coach_chat_fallback(messages: list, context: dict | None) -> dict:
+    text = _last_user_message(messages) or "你好"
+    personality = _coach_personality_key(context)
+    local = build_chat_reply(text, personality)
+    return {
+        "content": local["reply"],
+        "usage": {},
+        "fallback": True,
+        "fallback_message": "云端大模型暂时无法连接，已使用本地教练模板回复（与免费额度无关）",
+    }
 
 
 @ai_bp.post("/generate-plan")
@@ -38,20 +73,42 @@ def generate_plan():
         print(f"[DEBUG] 收到请求数据: {data}")
         user_id = int(get_jwt_identity())
 
+        start_date = data.get("start_date") or data.get("startDate")
+        end_date = data.get("end_date") or data.get("endDate")
+        days_per_week = data.get("days_per_week") or data.get("daysPerWeek") or 4
+        duration = data.get("duration")
+        if duration is None and start_date and end_date:
+            duration = duration_weeks_between(start_date, end_date)
+        duration = duration or 4
+
         user_profile = {
             "goal": data.get("goal", "综合健身"),
             "level": data.get("level", "有基础"),
-            "days_per_week": data.get("days_per_week", 4),
-            "duration": data.get("duration", 4),
+            "days_per_week": days_per_week,
+            "duration": duration,
             "preferences": data.get("preferences", "均衡"),
             "restrictions": data.get("restrictions", ""),
             "notes": data.get("notes", ""),
             "training_days": data.get("training_days", ""),
+            "start_date": start_date or "",
+            "end_date": end_date or "",
         }
         print(f"[DEBUG] user_profile training_days: {user_profile['training_days']}")
 
-        ai_client = get_ai_client()
-        result = ai_client.generate_plan(user_profile)
+        result = None
+        try:
+            ai_client = get_ai_client()
+            result = ai_client.generate_plan(user_profile)
+        except (ConnectionError, TimeoutError) as ai_err:
+            if os.getenv("FITMATE_AI_PLAN_FALLBACK", "1").strip().lower() in ("0", "false", "no"):
+                raise
+            from services.plan_service import build_local_plan_result
+            print(f"[AI] DashScope 不可用，启用本地模板: {ai_err}")
+            result = build_local_plan_result(user_profile)
+            result["fallback"] = True
+            result["fallback_message"] = (
+                "云端大模型暂时无法连接，已自动使用本地智能模板生成计划（与免费额度无关）"
+            )
 
         print(f"[DEBUG ai_routes] plan_data keys: {result.get('plan', {}).keys() if result.get('success') else 'N/A'}")
         print(f"[DEBUG ai_routes] weekly_schedule: {result.get('plan', {}).get('weekly_schedule', [])}")
@@ -66,8 +123,8 @@ def generate_plan():
                 plan_data=plan_data,
                 goal=user_profile["goal"],
                 level=user_profile["level"],
-                start_date=data.get("start_date"),
-                end_date=data.get("end_date"),
+                start_date=start_date,
+                end_date=end_date,
                 training_days=data.get("training_days", "")
             )
             result["saved_plan_id"] = saved_plan["plan_id"]
@@ -175,12 +232,21 @@ def fitness_coach_chat():
         request_context = data.get("context") or {}
         context = build_coach_user_context(user_id, request_context)
 
-        ai_client = get_ai_client()
-        result = ai_client.fitness_coach(messages, context)
+        result = None
+        try:
+            ai_client = get_ai_client()
+            result = ai_client.fitness_coach(messages, context)
+        except (ConnectionError, TimeoutError) as ai_err:
+            if os.getenv("FITMATE_AI_CHAT_FALLBACK", "1").strip().lower() in ("0", "false", "no"):
+                raise
+            print(f"[AI] 教练对话 DashScope 不可用，启用本地模板: {ai_err}")
+            result = _coach_chat_fallback(messages, request_context)
 
         return ok(data={
             "content": result["content"],
-            "usage": result.get("usage", {})
+            "usage": result.get("usage", {}),
+            "fallback": result.get("fallback", False),
+            "fallback_message": result.get("fallback_message", ""),
         })
 
     except ValueError as e:
