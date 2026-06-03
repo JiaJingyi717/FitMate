@@ -45,11 +45,29 @@ def test_generate_plan_success_with_save(client, auth_headers, monkeypatch):
     assert data["saved_plan"]["plan_name"] == "保存计划"
 
 
-def test_generate_plan_timeout(client, auth_headers, monkeypatch):
+def test_generate_plan_timeout_fallback(client, auth_headers, monkeypatch):
     class FakeClient:
         def generate_plan(self, profile):
             raise TimeoutError("timeout")
 
+    monkeypatch.setattr("routes.ai_routes.get_ai_client", lambda: FakeClient())
+    resp = client.post(
+        "/api/ai/generate-plan",
+        json={"goal": "减脂", "training_days": "周一、周三", "start_date": "2026-04-01", "end_date": "2026-04-30"},
+        headers=auth_headers,
+    )
+    data = resp.get_json()
+    assert resp.status_code == 200
+    assert data["data"]["fallback"] is True
+    assert data["data"]["plan"]["plan_name"]
+
+
+def test_generate_plan_timeout_no_fallback(client, auth_headers, monkeypatch):
+    class FakeClient:
+        def generate_plan(self, profile):
+            raise TimeoutError("timeout")
+
+    monkeypatch.setenv("FITMATE_AI_PLAN_FALLBACK", "0")
     monkeypatch.setattr("routes.ai_routes.get_ai_client", lambda: FakeClient())
     resp = client.post("/api/ai/generate-plan", json={"goal": "减脂"}, headers=auth_headers)
     assert resp.status_code == 504
@@ -61,8 +79,14 @@ def test_generate_plan_connection_and_value_error(client, auth_headers, monkeypa
             raise ConnectionError("down")
 
     monkeypatch.setattr("routes.ai_routes.get_ai_client", lambda: ConnClient())
-    resp = client.post("/api/ai/generate-plan", json={"goal": "减脂"}, headers=auth_headers)
-    assert resp.status_code == 503
+    resp = client.post(
+        "/api/ai/generate-plan",
+        json={"goal": "减脂", "training_days": "周一", "start_date": "2026-04-01", "end_date": "2026-04-30"},
+        headers=auth_headers,
+    )
+    data = resp.get_json()
+    assert resp.status_code == 200
+    assert data["data"]["fallback"] is True
 
     class ValueClient:
         def generate_plan(self, profile):
@@ -124,6 +148,38 @@ def test_coach_chat_validation_and_success(client, auth_headers, monkeypatch):
     assert data["data"]["content"] == "保持节奏"
     assert "fitness_level" in captured["context"]
     assert captured["context"].get("coach_personality") == "温柔鼓励型"
+
+
+def test_coach_chat_timeout_fallback(client, auth_headers, monkeypatch):
+    class FakeClient:
+        def fitness_coach(self, msgs, ctx):
+            raise TimeoutError("timeout")
+
+    monkeypatch.setattr("routes.ai_routes.get_ai_client", lambda: FakeClient())
+    resp = client.post(
+        "/api/ai/coach/chat",
+        json={"messages": [{"role": "user", "content": "帮我生成一个训练计划"}], "context": {"coach_personality": "gentle"}},
+        headers=auth_headers,
+    )
+    data = resp.get_json()
+    assert resp.status_code == 200
+    assert data["data"]["fallback"] is True
+    assert "训练计划" in data["data"]["content"] or "教练" in data["data"]["content"]
+
+
+def test_coach_chat_timeout_no_fallback(client, auth_headers, monkeypatch):
+    class FakeClient:
+        def fitness_coach(self, msgs, ctx):
+            raise ConnectionError("down")
+
+    monkeypatch.setenv("FITMATE_AI_CHAT_FALLBACK", "0")
+    monkeypatch.setattr("routes.ai_routes.get_ai_client", lambda: FakeClient())
+    resp = client.post(
+        "/api/ai/coach/chat",
+        json={"messages": [{"role": "user", "content": "你好"}]},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 503
 
 
 def test_progress_analysis_success(client, auth_headers, monkeypatch):

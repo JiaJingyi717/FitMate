@@ -292,6 +292,101 @@ def delete_plan(plan):
         raise
 
 
+def _parse_training_days(training_days_input):
+    if isinstance(training_days_input, list):
+        return [d.strip() for d in training_days_input if d and str(d).strip()]
+    if isinstance(training_days_input, str):
+        return [d.strip() for d in training_days_input.replace(",", "、").split("、") if d.strip()]
+    return []
+
+
+def _tasks_to_weekly_schedule(tasks, training_days_input):
+    weekly_schedule = []
+    if training_days_input:
+        daily_buckets = {day_name: [] for day_name in training_days_input}
+        for idx, task in enumerate(tasks):
+            day_name = training_days_input[idx % len(training_days_input)]
+            daily_buckets[day_name].append({
+                "name": task.get("name", ""),
+                "type": task.get("type", "综合"),
+                "duration": task.get("duration", 30),
+                "duration_minutes": task.get("duration", 30),
+                "duration_str": task.get("duration_str", f"{task.get('duration', 30)}分钟"),
+                "calories": task.get("calories", 0),
+                "sets": task.get("sets"),
+                "reps": task.get("reps"),
+                "rest": task.get("rest"),
+                "description": "",
+            })
+        for day_name in training_days_input:
+            day_exercises = daily_buckets.get(day_name, [])
+            if not day_exercises:
+                continue
+            weekly_schedule.append({
+                "day": day_name,
+                "exercises": day_exercises,
+                "estimated_calories": sum(ex.get("calories", 0) for ex in day_exercises),
+            })
+    elif tasks:
+        weekly_schedule.append({
+            "day": "周一",
+            "exercises": [{
+                "name": t.get("name", ""),
+                "type": t.get("type", "综合"),
+                "duration": t.get("duration", 30),
+                "duration_minutes": t.get("duration", 30),
+                "duration_str": t.get("duration_str", f"{t.get('duration', 30)}分钟"),
+                "calories": t.get("calories", 0),
+                "sets": t.get("sets"),
+                "reps": t.get("reps"),
+                "rest": t.get("rest"),
+                "description": "",
+            } for t in tasks],
+            "estimated_calories": sum(t.get("calories", 0) for t in tasks),
+        })
+    return weekly_schedule
+
+
+def build_local_plan_result(user_profile: dict) -> dict:
+    """DashScope 不可用时，用本地规则模板生成计划（结构与 AI 返回一致）。"""
+    from utils.plan_dates import duration_weeks_between
+
+    goal = user_profile.get("goal", "综合健身")
+    level = user_profile.get("level", "有基础")
+    days_per_week = int(user_profile.get("days_per_week") or 4)
+    training_days_input = _parse_training_days(user_profile.get("training_days"))
+    if not training_days_input:
+        defaults = ["周一", "周三", "周五", "周六"]
+        training_days_input = defaults[: max(1, min(days_per_week, len(defaults)))]
+
+    duration = user_profile.get("duration") or duration_weeks_between(
+        user_profile.get("start_date"),
+        user_profile.get("end_date"),
+    )
+    duration = max(1, int(duration or 4))
+    additional = user_profile.get("restrictions") or user_profile.get("notes") or ""
+
+    tasks = generate_ai_plan_content(
+        goal,
+        level,
+        len(training_days_input),
+        45,
+        training_days_input,
+        additional,
+    )
+    weekly_schedule = _tasks_to_weekly_schedule(tasks, training_days_input)
+    difficulty = "中级" if level == "有基础" else ("初级" if level == "初学者" else "高级")
+
+    plan_data = {
+        "plan_name": f"智能{goal}计划",
+        "description": f"基于{goal}目标生成的训练计划",
+        "duration_weeks": duration,
+        "difficulty": difficulty,
+        "weekly_schedule": weekly_schedule,
+    }
+    return {"success": True, "plan": plan_data, "source": "local_fallback"}
+
+
 def ai_generate_plan(user_id: int, payload: dict, save: bool = True):
     print(f"[DEBUG ai_generate_plan] 接收到的 payload: {payload}")
 
@@ -465,6 +560,11 @@ def check_in_task(user_id: int, task: PlanTask, is_completed: bool):
         db.session.delete(existing)
 
     db.session.commit()
+
+    if is_completed:
+        from services.achievement_service import sync_user_achievements
+        sync_user_achievements(user_id)
+
     return record
 
 
@@ -524,9 +624,11 @@ def save_ai_plan(user_id: int, plan_data: dict, goal: str, level: str, start_dat
     print(f"[DEBUG] save_ai_plan called with start_date={start_date}, end_date={end_date}")
     print(f"[DEBUG] plan_data weekly_schedule: {plan_data.get('weekly_schedule', [])}")
 
+    from utils.exercise_duration import resolve_duration_minutes
+    from utils.plan_dates import duration_weeks_between
+
     plan_name = plan_data.get("plan_name", f"AI智能{goal}计划")
     description = plan_data.get("description", f"由AI生成的{goal}训练计划")
-    duration_weeks = plan_data.get("duration_weeks", 4)
     difficulty = plan_data.get("difficulty", "中级")
     weekly_schedule = plan_data.get("weekly_schedule", [])
     print(f"[DEBUG save_ai_plan] training_days 参数: '{training_days}'")
@@ -562,11 +664,16 @@ def save_ai_plan(user_id: int, plan_data: dict, goal: str, level: str, start_dat
             try:
                 end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
             except (ValueError, TypeError):
-                end_date = start_date + timedelta(days=duration_weeks * 7)
+                end_date = start_date + timedelta(days=28)
         elif not isinstance(end_date, date):
-            end_date = start_date + timedelta(days=duration_weeks * 7)
+            end_date = start_date + timedelta(days=28)
     else:
-        end_date = start_date + timedelta(days=duration_weeks * 7)
+        end_date = start_date + timedelta(days=28)
+
+    duration_weeks = duration_weeks_between(start_date, end_date, default=0)
+    if not duration_weeks:
+        duration_weeks = plan_data.get("duration_weeks", 4)
+    duration_weeks = max(1, int(duration_weeks))
 
     # 计算总卡路里
     total_calories = 0
@@ -661,6 +768,9 @@ def save_ai_plan(user_id: int, plan_data: dict, goal: str, level: str, start_dat
             else:
                 day_offset = day_map.get(day_name, week_idx % 7)
                 target_date = start_date + timedelta(days=week_idx * 7 + day_offset)
+
+            if target_date < start_date or target_date > end_date:
+                continue
 
             exercises = day_data.get("exercises", [])
             print(f"[DEBUG] week={week_idx}, day_name={day_name}, target_date={target_date}, exercises_count={len(exercises)}")

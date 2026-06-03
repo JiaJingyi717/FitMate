@@ -51,6 +51,8 @@ services:
       FITMATE_PRODUCTION: "1"
       QWEN_API_KEY: ${QWEN_API_KEY:-}
       QWEN_MODEL: ${QWEN_MODEL:-qwen3.5-omni-plus}
+      QWEN_PLAN_MODEL: ${QWEN_PLAN_MODEL:-qwen-plus}
+      QWEN_PLAN_TIMEOUT: ${QWEN_PLAN_TIMEOUT:-180}
       QWEN_API_BASE: ${QWEN_API_BASE:-https://dashscope.aliyuncs.com/compatible-mode/v1}
     depends_on:
       db:
