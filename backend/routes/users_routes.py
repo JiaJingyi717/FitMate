@@ -2,8 +2,8 @@ from flask import Blueprint, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from werkzeug.security import generate_password_hash
 
-from models.achievement import Achievement, UserAchievement
 from models.user import User
+from services.achievement_service import list_user_achievements
 from services.user_service import get_user_stats, update_user_profile, verify_password
 from utils.extensions import db
 from utils.response import fail, ok
@@ -87,22 +87,7 @@ def get_user_stats_route():
 @jwt_required()
 def get_achievements():
     user_id = int(get_jwt_identity())
-    all_achievements = db.session.query(Achievement).all()
-    earned_ids = {
-        row.achievement_id
-        for row in db.session.query(UserAchievement.achievement_id).filter_by(user_id=user_id).all()
-    }
-    return ok([
-        {
-            "id": a.id,
-            "name": a.achievement_name,
-            "description": a.description,
-            "icon": a.icon,
-            "badgeType": a.badge_type,
-            "isEarned": a.id in earned_ids,
-        }
-        for a in all_achievements
-    ])
+    return ok(list_user_achievements(user_id))
 
 
 @users_bp.post("/users/password/change")

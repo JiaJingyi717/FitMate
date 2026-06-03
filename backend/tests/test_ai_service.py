@@ -22,7 +22,7 @@ def test_chat_success_and_singleton(monkeypatch):
         def json(self):
             return {"choices": [{"message": {"content": "ok"}}], "usage": {"tokens": 10}, "model": "m1"}
 
-    monkeypatch.setattr("requests.post", lambda *args, **kwargs: Resp())
+    monkeypatch.setattr(QwenAIClient, "_post_with_retry", lambda *args, **kwargs: Resp())
     c = QwenAIClient()
     out = c.chat([{"role": "user", "content": "hi"}])
     assert out["content"] == "ok"
@@ -40,14 +40,14 @@ def test_chat_exception_branches(monkeypatch):
     def timeout_post(*args, **kwargs):
         raise requests.exceptions.Timeout()
 
-    monkeypatch.setattr("requests.post", timeout_post)
+    monkeypatch.setattr(QwenAIClient, "_post_with_retry", timeout_post)
     with pytest.raises(TimeoutError):
         c.chat([{"role": "user", "content": "hi"}])
 
     def reqerr_post(*args, **kwargs):
         raise requests.exceptions.RequestException("bad")
 
-    monkeypatch.setattr("requests.post", reqerr_post)
+    monkeypatch.setattr(QwenAIClient, "_post_with_retry", reqerr_post)
     with pytest.raises(ConnectionError):
         c.chat([{"role": "user", "content": "hi"}])
 
@@ -58,7 +58,7 @@ def test_chat_exception_branches(monkeypatch):
         def json(self):
             return {"choices": []}
 
-    monkeypatch.setattr("requests.post", lambda *args, **kwargs: BadResp())
+    monkeypatch.setattr(QwenAIClient, "_post_with_retry", lambda *args, **kwargs: BadResp())
     with pytest.raises(ValueError):
         c.chat([{"role": "user", "content": "hi"}])
 

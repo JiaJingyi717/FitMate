@@ -18,6 +18,8 @@ def app():
     test_app = create_app()
     with test_app.app_context():
         db.create_all()
+        from data.seed_data import seed_achievements
+        seed_achievements()
         yield test_app
         db.drop_all()
 

@@ -108,6 +108,8 @@ def like_article(user_id: int, article: Article):
         article.like_count += 1
         is_liked = True
     db.session.commit()
+    from services.achievement_service import sync_user_achievements
+    sync_user_achievements(user_id)
     return article.like_count, is_liked
 
 
@@ -125,6 +127,8 @@ def collect_article(user_id: int, article: Article):
         article.collect_count += 1
         is_collected = True
     db.session.commit()
+    from services.achievement_service import sync_user_achievements
+    sync_user_achievements(user_id)
     return article.collect_count, is_collected
 
 
@@ -166,6 +170,8 @@ def comment_article(user_id: int, article: Article, content: str):
     db.session.add(comment)
     article.comment_count += 1
     db.session.commit()
+    from services.achievement_service import sync_user_achievements
+    sync_user_achievements(user_id)
     return comment
 
 
