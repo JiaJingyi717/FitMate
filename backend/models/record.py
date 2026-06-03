@@ -12,6 +12,7 @@ class TrainingRecord(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     plan_id = db.Column(db.Integer, db.ForeignKey("training_plan.id"), nullable=True)
+    task_id = db.Column(db.Integer, db.ForeignKey("plan_tasks.id"), nullable=True)
     duration = db.Column(db.Integer, default=0)
     exercise_type = db.Column(db.String(64), nullable=False)
     calories = db.Column(db.Integer, default=0)

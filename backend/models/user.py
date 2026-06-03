@@ -11,7 +11,7 @@ class User(db.Model):
     phone = db.Column(db.String(32), nullable=True, unique=True)
     # 个人信息
     name = db.Column(db.String(64), default="")
-    avatar = db.Column(db.String(255), default="")
+    avatar = db.Column(db.Text, default="")
     gender = db.Column(db.String(16), default="")
     height = db.Column(db.Float, nullable=True)
     weight = db.Column(db.Float, nullable=True)

@@ -1,5 +1,7 @@
 from datetime import date, timedelta
 
+from utils.exercise_duration import effective_record_duration
+
 
 def _parse_range(range_: str) -> date:
     if range_ == "30d":
@@ -14,13 +16,14 @@ def build_overview(user_id: int, range_: str = "7d"):
         TrainingRecord.user_id == user_id,
         TrainingRecord.record_date >= since,
     ).all()
-    total_duration = sum(r.duration for r in records)
+    total_duration = sum(effective_record_duration(r) for r in records)
     total_calories = sum(r.calories for r in records)
     training_count = len(records)
     avg_duration = int(total_duration / training_count) if training_count > 0 else 0
     dist = {}
     for r in records:
-        dist[r.exercise_type] = dist.get(r.exercise_type, 0) + r.duration
+        duration = effective_record_duration(r)
+        dist[r.exercise_type] = dist.get(r.exercise_type, 0) + duration
     sport_distribution = [{"name": k, "value": v} for k, v in dist.items()]
     return {
         "totalDuration": total_duration,
@@ -41,8 +44,9 @@ def build_category_distribution(user_id: int, range_: str = "7d"):
     dist = {}
     total = 0
     for r in records:
-        dist[r.exercise_type] = dist.get(r.exercise_type, 0) + r.duration
-        total += r.duration
+        duration = effective_record_duration(r)
+        dist[r.exercise_type] = dist.get(r.exercise_type, 0) + duration
+        total += duration
     items = []
     for name, value in dist.items():
         items.append({
@@ -60,7 +64,7 @@ def build_duration_trend(user_id: int, range_: str = "7d"):
     for i in range(days - 1, -1, -1):
         d = date.today() - timedelta(days=i)
         recs = TrainingRecord.query.filter_by(user_id=user_id, record_date=d).all()
-        total_duration = sum(r.duration for r in recs)
+        total_duration = sum(effective_record_duration(r) for r in recs)
         total_calories = sum(r.calories for r in recs)
         m = d.month
         day = d.day
@@ -80,7 +84,7 @@ def build_ai_suggestions(user_id: int, range_: str = "7d"):
         TrainingRecord.record_date >= since,
     ).all()
     count = len(records)
-    total = sum(r.duration for r in records)
+    total = sum(effective_record_duration(r) for r in records)
 
     suggestions = []
     if count == 0:
