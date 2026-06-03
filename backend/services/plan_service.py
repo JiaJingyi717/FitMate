@@ -624,7 +624,6 @@ def save_ai_plan(user_id: int, plan_data: dict, goal: str, level: str, start_dat
     print(f"[DEBUG] save_ai_plan called with start_date={start_date}, end_date={end_date}")
     print(f"[DEBUG] plan_data weekly_schedule: {plan_data.get('weekly_schedule', [])}")
 
-    from utils.exercise_duration import resolve_duration_minutes
     from utils.plan_dates import duration_weeks_between
 
     plan_name = plan_data.get("plan_name", f"AI智能{goal}计划")
