@@ -7,13 +7,15 @@ export default defineConfig({
   resolve: {
     dedupe: ['vue', 'vue-router'],
   },
-  server: {
+    server: {
     port: 5173,
     host: '0.0.0.0',
     proxy: {
       '/api': {
         target: process.env.VITE_API_BASE_URL || 'http://backend:5000',
         changeOrigin: true,
+        timeout: 180000,
+        proxyTimeout: 180000,
       },
     },
   },

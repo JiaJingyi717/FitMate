@@ -13,7 +13,7 @@
           <p class="page-subtitle">管理你的健身训练计划</p>
         </div>
         <div class="header-actions">
-          <button class="btn-primary" @click="showAIDialog = true">
+          <button class="btn-primary" @click="openAIDialog">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
             </svg>
@@ -186,8 +186,8 @@
     </div>
 
     <!-- AI Generation Dialog -->
-    <div v-if="showAIDialog" class="dialog-overlay" @click.self="showAIDialog = false">
-      <div class="dialog">
+    <div v-if="showAIDialog" class="dialog-overlay" @click.self="!isGeneratingAI && (showAIDialog = false)">
+      <div class="dialog" :class="{ 'dialog-generating': isGeneratingAI }">
         <div class="dialog-header">
           <h3 class="dialog-title">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -195,14 +195,18 @@
             </svg>
             AI智能生成训练计划
           </h3>
-          <button class="dialog-close" @click="showAIDialog = false">
+          <button class="dialog-close" :disabled="isGeneratingAI" @click="showAIDialog = false">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="6" x2="6" y2="18"/>
               <line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
           </button>
         </div>
-        <div class="dialog-body">
+        <div v-if="isGeneratingAI" class="ai-generating-banner">
+          <span class="ai-generating-spinner"></span>
+          正在生成中，请稍候（约 10–90 秒）…
+        </div>
+        <div class="dialog-body" :class="{ 'dialog-body-disabled': isGeneratingAI }">
           <div class="form-section">
             <label class="form-label">你的健身目标是什么？</label>
             <div class="goal-grid">
@@ -270,13 +274,15 @@
           </div>
         </div>
         <div class="dialog-footer">
-          <button class="btn-outline" @click="showAIDialog = false">取消</button>
+          <button class="btn-outline" :disabled="isGeneratingAI" @click="showAIDialog = false">取消</button>
           <button
             class="btn-primary"
-            :disabled="!canGenerateAI"
+            :class="{ 'btn-loading': isGeneratingAI }"
+            :disabled="!canGenerateAI || isGeneratingAI"
             @click="generateAIPlan"
           >
-            生成计划
+            <span v-if="isGeneratingAI" class="btn-spinner"></span>
+            {{ isGeneratingAI ? '正在生成中…' : '生成计划' }}
           </button>
         </div>
       </div>
@@ -441,13 +447,25 @@ import {
 } from '../api/plan'
 import { generatePlan } from '../api/ai'
 import logger from '../utils/logger'
+import {
+  computeDurationWeeks,
+  defaultEndDateFrom,
+} from '../utils/planDates'
 
 const activeTab = ref('all')
 const showAIDialog = ref(false)
 const showPlanDetail = ref(false)
 const selectedPlan = ref(null)
 const isLoading = ref(false)
+const isGeneratingAI = ref(false)
 const errorMessage = ref('')
+
+function formatLocalDateKey(date) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
 
 // 显示错误提示
 function showError(msg) {
@@ -697,9 +715,22 @@ const stats = computed(() => {
 })
 
 const canGenerateAI = computed(() => {
-  // 只需要目标、水平和训练天数，日期可选
-  return aiForm.value.goal && aiForm.value.level && aiForm.value.trainingDays.length > 0
+  const f = aiForm.value
+  if (!f.goal || !f.level || f.trainingDays.length === 0) return false
+  if (!f.startDate || !f.endDate) return false
+  return new Date(`${f.endDate}T00:00:00`) >= new Date(`${f.startDate}T00:00:00`)
 })
+
+const openAIDialog = () => {
+  const today = formatLocalDateKey(new Date())
+  if (!aiForm.value.startDate) {
+    aiForm.value.startDate = today
+  }
+  if (!aiForm.value.endDate) {
+    aiForm.value.endDate = defaultEndDateFrom(aiForm.value.startDate, 4)
+  }
+  showAIDialog.value = true
+}
 
 const switchToTodayTab = async () => {
   activeTab.value = 'today'
@@ -874,31 +905,31 @@ const openPlanDetail = async (plan) => {
 
 const generateAIPlan = async () => {
   if (!canGenerateAI.value) {
-    showError('请填写完整信息')
+    showError('请填写完整信息，并确保结束日期不早于开始日期')
     return
   }
 
-  isLoading.value = true
+  isGeneratingAI.value = true
 
   try {
-    // 获取或设置默认日期
-    const today = new Date().toISOString().split('T')[0]
-    const defaultEndDate = new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    const today = formatLocalDateKey(new Date())
+    const startDate = aiForm.value.startDate || today
+    const endDate = aiForm.value.endDate || defaultEndDateFrom(startDate, 4)
+    const durationWeeks = computeDurationWeeks(startDate, endDate)
 
-    // 训练天数直接使用已选择的日期数组
     const trainingDaysStr = aiForm.value.trainingDays.join('、')
     
     const requestData = {
       goal: aiForm.value.goal,
       level: aiForm.value.level,
       daysPerWeek: aiForm.value.trainingDays.length,
-      duration: 4,
+      duration: durationWeeks,
       preferences: '均衡',
       restrictions: aiForm.value.additionalRequirements,
       notes: '',
       save: true,
-      start_date: aiForm.value.startDate || today,
-      end_date: aiForm.value.endDate || defaultEndDate,
+      start_date: startDate,
+      end_date: endDate,
       training_days: trainingDaysStr
     }
     logger.debug('Plan', 'AI 请求数据', requestData)
@@ -932,26 +963,26 @@ const generateAIPlan = async () => {
         const allDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
         const trainingDaysSet = new Set(selectedDays)
 
-        // 解析开始日期
-        const startDateStr = savedPlan?.start_date || aiForm.value.startDate
-        const startDate = startDateStr ? new Date(startDateStr) : new Date()
+        const startDateStr = savedPlan?.start_date || startDate
+        const endDateStr = savedPlan?.end_date || endDate
+        const startDateObj = new Date(`${startDateStr}T12:00:00`)
+        const endDateObj = new Date(`${endDateStr}T12:00:00`)
 
-        // 按周分组，每周7天，填充休息日
+        // 按周分组：从计划首周周日到末周周六
         const weeks = []
         let currentWeek = []
-        let currentDate = new Date(startDate)
+        const calendarStart = new Date(startDateObj)
+        calendarStart.setDate(calendarStart.getDate() - calendarStart.getDay())
+        const calendarEnd = new Date(endDateObj)
+        calendarEnd.setDate(calendarEnd.getDate() + (6 - calendarEnd.getDay()))
 
-        // 如果开始日期不是周日，调整到对应周的周日
-        const dayOfWeek = currentDate.getDay()
-        const daysToSunday = dayOfWeek
-        currentDate.setDate(currentDate.getDate() - daysToSunday)
-
-        for (let i = 0; i < 28; i++) { // 4周 = 28天
-          const date = new Date(currentDate)
-          date.setDate(currentDate.getDate() + i)
-
+        const cursor = new Date(calendarStart)
+        let dayIndex = 0
+        while (cursor <= calendarEnd) {
+          const date = new Date(cursor)
           const dayName = allDays[date.getDay()]
-          const dateKey = date.toISOString().split('T')[0]
+          const dateKey = formatLocalDateKey(date)
+          const inPlanRange = dateKey >= startDateStr && dateKey <= endDateStr
 
           // 查找这一天是否有训练任务
           const dayData = daysData.find(d => {
@@ -960,11 +991,11 @@ const generateAIPlan = async () => {
             return false
           })
 
-          if (trainingDaysSet.has(dayName) && dayData) {
+          if (inPlanRange && trainingDaysSet.has(dayName) && dayData) {
             const dayTasks = (dayData.exercises || []).map((ex, exIdx) => {
               const durationMinutes = ex.duration_minutes || ex.durationMinutes || ex.duration || 0
               return {
-                id: `ai-${Date.now()}-${i}-${exIdx}`,
+                id: `ai-${Date.now()}-${dayIndex}-${exIdx}`,
                 name: ex.name,
                 type: ex.type || '综合',
                 duration: ex.duration_str || (durationMinutes ? `${durationMinutes}分钟` : ''),
@@ -1004,6 +1035,9 @@ const generateAIPlan = async () => {
             weeks.push(currentWeek)
             currentWeek = []
           }
+
+          cursor.setDate(cursor.getDate() + 1)
+          dayIndex += 1
         }
 
         weeklySchedule = weeks.map((weekDays, weekIdx) => ({
@@ -1027,10 +1061,12 @@ const generateAIPlan = async () => {
         name: res.data.plan?.plan_name || savedPlan?.plan_name || `AI智能${aiForm.value.goal}计划`,
         description: res.data.plan?.description || savedPlan?.description || `基于${aiForm.value.goal}目标的AI训练计划`,
         type: 'AI生成',
-        duration: res.data.plan?.duration_weeks ? `${res.data.plan.duration_weeks}周` : `${aiForm.value.trainingDays.length * 4}周`,
+        duration: res.data.plan?.duration_weeks
+          ? `${res.data.plan.duration_weeks}周`
+          : savedPlan?.duration_str || `${durationWeeks}周`,
         difficulty: res.data.plan?.difficulty || savedPlan?.difficulty || difficultyMap[aiForm.value.level] || '中级',
-        startDate: savedPlan?.start_date || aiForm.value.startDate || new Date().toISOString().split('T')[0],
-        endDate: savedPlan?.end_date || aiForm.value.endDate || '',
+        startDate: savedPlan?.start_date || startDate,
+        endDate: savedPlan?.end_date || endDate,
         tasks: tasks,
         weeklySchedule: weeklySchedule,
         totalTasks: tasks.length,
@@ -1056,7 +1092,11 @@ const generateAIPlan = async () => {
         additionalRequirements: ''
       }
 
-      showSuccess('AI计划生成成功！')
+      showSuccess(
+        res.data.fallback
+          ? (res.data.fallback_message || '已使用本地模板生成计划')
+          : 'AI计划生成成功！'
+      )
 
       // 生成后立即同步后端数据，避免列表/详情统计不一致
       await Promise.all([loadPlanList(), loadTodayTasks()])
@@ -1067,7 +1107,7 @@ const generateAIPlan = async () => {
     logger.error('Plan', 'AI生成计划失败')
     showError(error.message || '生成计划失败，请重试')
   } finally {
-    isLoading.value = false
+    isGeneratingAI.value = false
   }
 }
 </script>
@@ -1567,6 +1607,59 @@ const generateAIPlan = async () => {
   border-top: 1px solid #e5e7eb;
 }
 
+.ai-generating-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 24px;
+  padding: 12px 16px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  color: #1d4ed8;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.ai-generating-spinner,
+.btn-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(37, 99, 235, 0.2);
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: plan-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+.btn-spinner {
+  border-color: rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  margin-right: 6px;
+}
+
+.btn-loading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 120px;
+}
+
+.dialog-body-disabled {
+  pointer-events: none;
+  opacity: 0.65;
+}
+
+.dialog-close:disabled,
+.btn-outline:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@keyframes plan-spin {
+  to { transform: rotate(360deg); }
+}
+
 .btn-outline {
   padding: 10px 20px;
   border: 1px solid #d1d5db;
@@ -1579,7 +1672,7 @@ const generateAIPlan = async () => {
   transition: all 0.2s;
 }
 
-.btn-outline:hover {
+.btn-outline:hover:not(:disabled) {
   border-color: #2563eb;
   color: #2563eb;
 }

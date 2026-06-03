@@ -14,7 +14,7 @@ export function generatePlan(data) {
   return request({
     url: '/api/ai/generate-plan',
     method: 'post',
-    timeout: 120000, // 120秒超时
+    timeout: 180000, // 180秒，与后端 QWEN_PLAN_TIMEOUT 对齐
     data: {
       goal: data.goal || '综合健身',
       level: data.level || '有基础',

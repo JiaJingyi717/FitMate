@@ -29,7 +29,7 @@ describe('api/ai.js', () => {
       expect.objectContaining({
         url: '/api/ai/generate-plan',
         method: 'post',
-        timeout: 120000,
+        timeout: 180000,
         data: expect.objectContaining({
           goal: '增肌',
           level: '有基础',
