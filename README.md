@@ -111,12 +111,6 @@ deploy.bat           # Windows
 ### Windows 本机打包
 
 ```bat
-pack-upload.bat
-```
-
-或 CMD 单行：
-
-```bat
 tar -czf fitmate-upload.tar.gz --exclude=node_modules --exclude=.git --exclude=frontend/fitmate-frontend/node_modules --exclude=frontend/fitmate-frontend/dist --exclude=.env --exclude=backend/.env .
 ```
 
