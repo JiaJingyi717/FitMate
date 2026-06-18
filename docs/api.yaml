@@ -2,16 +2,22 @@ openapi: 3.0.3
 info:
   title: FitMate API
   description: |
-    FitMate 健身助手后端 RESTful API
-    基础地址：http://127.0.0.1:5000
-    所有接口返回格式统一：`{ code, message, data }`
-  version: 3.0.0
+    FitMate 健身助手后端 RESTful API。
+
+    - 统一响应：`{ code, message, data }`
+    - 鉴权：除标注 `security: []` 的接口外，Header `Authorization: Bearer <JWT>`
+    - AI 对话/计划生成主路径：`/api/ai/*`（DashScope + 本地降级）
+    - 教练会话辅助路径：`/api/coaches/*`（列表、切换、本地模板对话）
+    - 健康与指标：`/health`、`/api/health`、`/api/metrics`
+  version: 4.0.0
   contact:
     name: FitMate Team
 
 servers:
   - url: http://127.0.0.1:5000
-    description: 本地开发环境
+    description: 本地开发（Flask 直连）
+  - url: http://121.196.198.164
+    description: 线上环境（Nginx 反代）
 
 security:
   - bearerAuth: []
@@ -22,13 +28,17 @@ tags:
   - name: 个人中心
     description: 用户资料、成就、密码管理、账号注销
   - name: AI教练
-    description: 教练列表、个性风格、会话管理、对话
+    description: 教练列表、会话初始化、切换教练、本地模板对话（`/api/coaches/*`）
+  - name: AI智能
+    description: DashScope 大模型能力（计划生成、教练对话、饮食建议、进度分析、健康检查）
   - name: 训练计划
-    description: 计划 CRUD、今日任务、打卡、AI 生成
+    description: 计划 CRUD、今日任务、打卡、向导式 AI 生成（`/api/plans/ai-generate`）
   - name: 知识库
     description: 文章/视频列表、详情、点赞收藏评论
   - name: 数据分析
     description: 训练数据总览、分布、趋势、AI 建议
+  - name: 监控
+    description: 健康检查与进程内 HTTP 指标（无需鉴权）
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -42,10 +52,10 @@ paths:
       summary: 用户注册
       security: []
       description: |
-        支持两种注册方式：
-        - 邮箱注册（必填 email + password，可选 name/phone）
-        - 手机号注册（必填 phone + password，可选 name/email）
-        两种方式二选一。
+        注册成功后直接返回 JWT，前端可免二次登录。
+
+        - 必填：`name`（同时作为 username）、`password`
+        - 可选：`email`、`phone`（用于后续邮箱/手机号登录）
       requestBody:
         required: true
         content:
@@ -53,9 +63,9 @@ paths:
             schema:
               $ref: '#/components/schemas/RegisterRequest'
             example:
+              name: "李明"
               email: "user@example.com"
               password: "Test123456"
-              name: "李明"
               phone: "13800138000"
       responses:
         '200':
@@ -133,7 +143,9 @@ paths:
       tags: [认证]
       summary: 忘记密码 - 重置密码
       security: []
-      description: 使用验证码重置密码（模拟实现，验证码写死为 123456）
+      description: |
+        使用验证码重置密码。验证码由服务端环境变量 `FITMATE_PASSWORD_RESET_CODE` 配置；
+        未配置时返回 503。
       requestBody:
         required: true
         content:
@@ -416,12 +428,12 @@ paths:
   /api/coaches/chat:
     post:
       tags: [AI教练]
-      summary: 发送消息并获取 AI 回复
+      summary: 发送消息（本地模板回复，兼容旧版）
       description: |
-        接收用户消息，返回 AI 教练的回复。
-        回复内容根据用户当前设置的 coachPersonality 调整语气风格。
-        若消息中包含"训练计划"/"数据分析"/"健身知识"等关键词，
-        回复中会附带导航卡片引导用户跳转对应页面。
+        **兼容接口**：使用 `build_chat_reply` 本地模板，会话写入 `coach_sessions` 表。
+
+        前端主流程（`Home.vue`）已改用 **POST `/api/ai/coach/chat`**（DashScope + 用户画像注入 + 降级）。
+        本接口仍可用于 Apifox 联调本地模板与导航卡片（关键词触发 recommendation）。
       requestBody:
         required: true
         content:
@@ -587,14 +599,12 @@ paths:
   /api/plans/ai-generate:
     post:
       tags: [训练计划]
-      summary: AI 生成训练计划（多步向导）
+      summary: AI 生成训练计划（向导式，兼容旧版）
       description: |
-        支持两步：
-        - Step 1（可选）：提交参数，获取 AI 生成的预览计划
-        - Step 2：确认并保存计划到数据库
+        **兼容接口**：计划模块内置向导生成逻辑（`plan_service.ai_generate_plan`）。
 
-        AI 根据用户健身目标、体能水平、每周训练日、每次训练时长、
-        开始/结束日期、额外要求等生成个性化计划。
+        前端主流程（`Plan.vue`）已改用 **POST `/api/ai/generate-plan`**（DashScope qwen-plus，
+        超时默认 180s，失败时 `FITMATE_AI_PLAN_FALLBACK` 本地模板降级）。
       requestBody:
         required: false
         content:
@@ -1042,6 +1052,260 @@ paths:
               schema:
                 $ref: '#/components/schemas/AiSuggestionsResponse'
 
+  # ==================== AI 智能模块（/api/ai） ====================
+  /api/ai/health:
+    get:
+      tags: [AI智能]
+      summary: AI 服务健康检查
+      security: []
+      description: |
+        检查 DashScope 客户端是否就绪。无需 JWT。
+        - `ready`：已配置 `QWEN_API_KEY` 且客户端初始化成功
+        - `not_configured`：未配置 API Key（仍返回 200）
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiHealthResponse'
+        '503':
+          description: AI 服务异常
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/ai/generate-plan:
+    post:
+      tags: [AI智能]
+      summary: AI 生成训练计划（主路径）
+      description: |
+        调用 DashScope 生成个性化计划，可选 `save: true` 写入数据库。
+        超时默认 180s（`QWEN_PLAN_TIMEOUT`）；连接失败时若 `FITMATE_AI_PLAN_FALLBACK=1` 则本地模板降级。
+        支持 snake_case 与 camelCase 字段（如 `start_date` / `startDate`）。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AiSmartGeneratePlanRequest'
+            example:
+              goal: "减脂"
+              level: "有基础"
+              days_per_week: 4
+              start_date: "2026-04-01"
+              end_date: "2026-04-30"
+              training_days: "周一、周三、周五"
+              preferences: "均衡"
+              restrictions: ""
+              notes: ""
+              save: true
+      responses:
+        '200':
+          description: 生成成功（含可选 saved_plan_id）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiSmartGeneratePlanResponse'
+        '400':
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: 大模型不可用且未开启降级
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '504':
+          description: 生成超时且未开启降级
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/ai/diet-advice:
+    post:
+      tags: [AI智能]
+      summary: 获取饮食建议
+      description: 根据用户体征与训练信息生成饮食建议（DashScope）。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AiDietAdviceRequest'
+            example:
+              goal: "减脂"
+              weight: 70
+              height: 170
+              age: 25
+              gender: "男"
+              activity_level: "中度"
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiDietAdviceResponse'
+        '400':
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: 大模型不可用
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '504':
+          description: 请求超时
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/ai/coach/chat:
+    post:
+      tags: [AI智能]
+      summary: AI 教练对话（主路径）
+      description: |
+        前端 `Home.vue` 使用本接口。服务端注入用户画像（`coach_context_service`）后调用 DashScope。
+        超时默认 120s（`QWEN_CHAT_TIMEOUT`）；失败时 `FITMATE_AI_CHAT_FALLBACK=1` 降级为本地模板。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AiCoachChatRequest'
+            example:
+              messages:
+                - role: user
+                  content: "我想减脂，应该怎么训练？"
+              context:
+                coach_personality: "gentle"
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiCoachChatResponse'
+        '400':
+          description: messages 为空
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: 大模型不可用且未开启降级
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '504':
+          description: 对话超时且未开启降级
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/ai/progress-analysis:
+    post:
+      tags: [AI智能]
+      summary: 训练进度分析
+      description: 基于完成率、时长、卡路里等摘要做 AI 分析（数据分析页可配合使用）。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AiProgressAnalysisRequest'
+            example:
+              completed_tasks: 12
+              total_tasks: 20
+              total_duration: 300
+              total_calories: 2500
+              plan_count: 2
+              completion_rate: 60
+              recent_activities: "近一周以有氧为主"
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiProgressAnalysisResponse'
+        '400':
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: 大模型不可用
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '504':
+          description: 请求超时
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ==================== 监控模块 ====================
+  /health:
+    get:
+      tags: [监控]
+      summary: 健康检查（Docker / 负载均衡探针）
+      security: []
+      description: 与 `/api/health` 返回相同 payload，供容器 HEALTHCHECK 使用。
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthCheckResponse'
+
+  /api/health:
+    get:
+      tags: [监控]
+      summary: 健康检查
+      security: []
+      description: 探测数据库连通性，返回 `healthy` 或 `degraded`。
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthCheckResponse'
+
+  /api/metrics:
+    get:
+      tags: [监控]
+      summary: HTTP 指标快照
+      security: []
+      description: |
+        进程内累计指标：请求量、错误率、平均延迟、按状态码分布。
+        健康检查路径默认不计入统计（`FITMATE_METRICS_SKIP_HEALTH=1`）。
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetricsResponse'
+
 # ---------------------------------------------------------------------------
 # Schemas
 # ---------------------------------------------------------------------------
@@ -1093,17 +1357,21 @@ components:
     RegisterRequest:
       type: object
       description: |
-        邮箱注册（email + password）或手机号注册（phone + password），二选一。
-        若同时填写，以 email 为准。
+        `name` 必填，同时作为系统 username；`password` 必填。
+        `email` / `phone` 可选，用于后续登录。
       properties:
+        name:
+          type: string
+          description: 姓名（同时作为 username）
+          example: "李明"
         email:
           type: string
           format: email
-          description: 邮箱（注册方式一）
+          description: 邮箱（可选）
           example: "user@example.com"
         phone:
           type: string
-          description: 手机号（注册方式二）
+          description: 手机号（可选）
           example: "13800138000"
         password:
           type: string
@@ -1111,11 +1379,7 @@ components:
           minLength: 6
           description: 密码（至少6位）
           example: "Test123456"
-        name:
-          type: string
-          description: 姓名（可选）
-          example: "李明"
-      required: [password]
+      required: [name, password]
 
     RegisterResponse:
       allOf:
@@ -1128,6 +1392,10 @@ components:
                 userId:
                   type: integer
                   example: 1
+                token:
+                  type: string
+                  description: 注册成功后直接返回 JWT
+                  example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 
     LoginRequest:
       type: object
@@ -1189,7 +1457,9 @@ components:
 
     ResetPasswordRequest:
       type: object
-      description: 使用验证码重置密码（模拟实现，验证码写死为 123456）
+      description: |
+        使用验证码重置密码。验证码由服务端环境变量 `FITMATE_PASSWORD_RESET_CODE` 配置；
+        未配置时返回 503。
       properties:
         email:
           type: string
@@ -2478,3 +2748,305 @@ components:
                       description:
                         type: string
                         example: "根据数据分析，你的有氧训练占比较高..."
+
+    # ==================== AI 智能（/api/ai） ====================
+    AiSmartGeneratePlanRequest:
+      type: object
+      properties:
+        goal:
+          type: string
+          description: 健身目标
+          example: "减脂"
+        level:
+          type: string
+          description: 体能水平
+          example: "有基础"
+        days_per_week:
+          type: integer
+          description: 每周训练天数（snake_case）
+          example: 4
+        daysPerWeek:
+          type: integer
+          description: 每周训练天数（camelCase，与前端兼容）
+          example: 4
+        duration:
+          type: integer
+          description: 计划周数；若省略且提供 start/end 日期则自动计算
+          example: 4
+        preferences:
+          type: string
+          example: "均衡"
+        restrictions:
+          type: string
+          example: "膝盖不好"
+        notes:
+          type: string
+          example: "希望加强核心"
+        training_days:
+          type: string
+          description: 训练日描述，如「周一、周三、周五」
+          example: "周一、周三、周五"
+        start_date:
+          type: string
+          format: date
+          example: "2026-04-01"
+        end_date:
+          type: string
+          format: date
+          example: "2026-04-30"
+        startDate:
+          type: string
+          format: date
+          description: camelCase 别名
+        endDate:
+          type: string
+          format: date
+          description: camelCase 别名
+        save:
+          type: boolean
+          description: 是否保存到数据库，默认 true
+          default: true
+          example: true
+
+    AiSmartGeneratePlanResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                plan:
+                  type: object
+                  description: AI 生成的计划结构（含 plan_name、weekly_schedule 等）
+                saved_plan_id:
+                  type: integer
+                  description: save=true 时返回
+                  example: 88
+                saved_plan:
+                  type: object
+                  description: 保存后的计划摘要
+                fallback:
+                  type: boolean
+                  description: 是否使用了本地模板降级
+                  example: false
+                fallback_message:
+                  type: string
+                  example: ""
+
+    AiDietAdviceRequest:
+      type: object
+      properties:
+        goal:
+          type: string
+          example: "减脂"
+        weight:
+          type: number
+          example: 70
+        height:
+          type: number
+          example: 170
+        age:
+          type: integer
+          example: 25
+        gender:
+          type: string
+          example: "男"
+        activity_level:
+          type: string
+          example: "中度"
+        training_info:
+          type: object
+          nullable: true
+          properties:
+            daily_calories:
+              type: integer
+            training_days:
+              type: integer
+
+    AiDietAdviceResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              description: DashScope 返回的饮食建议结构
+
+    AiCoachChatMessage:
+      type: object
+      required: [role, content]
+      properties:
+        role:
+          type: string
+          enum: [user, assistant, system]
+          example: user
+        content:
+          type: string
+          example: "我想减脂，应该怎么训练？"
+
+    AiCoachChatRequest:
+      type: object
+      required: [messages]
+      properties:
+        messages:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/AiCoachChatMessage'
+        context:
+          type: object
+          description: 可选上下文；服务端会与用户画像合并
+          additionalProperties: true
+          example:
+            coach_personality: "gentle"
+
+    AiCoachChatResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                content:
+                  type: string
+                  example: "建议以有氧与力量结合……"
+                usage:
+                  type: object
+                  example: {}
+                fallback:
+                  type: boolean
+                  example: false
+                fallback_message:
+                  type: string
+                  example: ""
+
+    AiProgressAnalysisRequest:
+      type: object
+      properties:
+        completed_tasks:
+          type: integer
+          example: 12
+        total_tasks:
+          type: integer
+          example: 20
+        total_duration:
+          type: integer
+          description: 总训练时长（分钟）
+          example: 300
+        total_calories:
+          type: integer
+          example: 2500
+        plan_count:
+          type: integer
+          example: 2
+        completion_rate:
+          type: number
+          example: 60
+        recent_activities:
+          type: string
+          example: "近一周以有氧为主"
+
+    AiProgressAnalysisResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                analysis:
+                  type: object
+
+    AiHealthResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [ready, not_configured]
+                  example: ready
+                model:
+                  type: string
+                  example: qwen-plus
+                api_base:
+                  type: string
+                  example: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+                message:
+                  type: string
+                  description: status=not_configured 时的提示
+
+    # ==================== 监控 ====================
+    HealthCheckResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [healthy, degraded]
+                  example: healthy
+                timestamp:
+                  type: string
+                  format: date-time
+                  example: "2026-05-19T08:00:00+00:00"
+                version:
+                  type: string
+                  example: "1.0.0"
+                checks:
+                  type: object
+                  properties:
+                    database:
+                      type: string
+                      enum: [up, down]
+                      example: up
+
+    MetricsResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                uptime_seconds:
+                  type: integer
+                  example: 3600
+                requests_total:
+                  type: integer
+                  example: 128
+                errors_total:
+                  type: integer
+                  example: 3
+                error_rate:
+                  type: number
+                  format: float
+                  example: 0.0234
+                latency_ms_avg:
+                  type: number
+                  format: float
+                  example: 45.6
+                authenticated_requests:
+                  type: integer
+                  example: 90
+                by_status:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                  example:
+                    "200": 120
+                    "404": 2
+                    "401": 1
